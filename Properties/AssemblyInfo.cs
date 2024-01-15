@@ -35,5 +35,5 @@ using MelonLoader;
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: AssemblyFileVersion("1.0.0.0")]
 
-[assembly: MelonInfo(typeof(EventTracker.EventTracker), "Event Tracker", "1.0.0", "stxticOVFL")]
+[assembly: MelonInfo(typeof(EventTracker.EventTracker), "Event Tracker", "1.1.0-dev", "stxticOVFL")]
 [assembly: MelonGame("Little Flag Software, LLC", "Neon White")]

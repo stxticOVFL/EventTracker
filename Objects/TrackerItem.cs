@@ -27,6 +27,7 @@ namespace EventTracker.Objects
 
         private readonly float speed = 4;
         private Coroutine _easer;
+        private Coroutine _opacityEaser;
 
         void UpdateText()
         {
@@ -35,6 +36,12 @@ namespace EventTracker.Objects
             if (time != null)
                 _text.text = $"{text,-20} {time}";
             else _text.text = text;
+        }
+
+        public void ChangeOpacity(float opacity, float? start = null) { 
+            if (_opacityEaser != null)
+                StopCoroutine(_opacityEaser);
+            _opacityEaser = StartCoroutine(Co_Opacity(start ?? _opacity, opacity, 1 / speed));
         }
 
         private void Start()
@@ -59,7 +66,9 @@ namespace EventTracker.Objects
                 var pos = Screen.height - (index * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value;
                 var pre = pos - EventTracker.Settings.Padding.Value;
 
-                _easer = StartCoroutine(Co_Move(pre, pos, 1 / speed, 0, EventTracker.Settings.EndingOnly.Value ? 0 : 1));
+                _easer = StartCoroutine(Co_Move(pre, pos, 1 / speed));
+                if (!EventTracker.Settings.EndingOnly.Value && !TrackerHolder.hidden)
+                    ChangeOpacity(1);
             }
         }
 
@@ -90,7 +99,7 @@ namespace EventTracker.Objects
                 gameObject.SetActive(false);
         }
 
-        IEnumerator Co_Move(float start, float end, float length, float opacity_start, float opacity_end)
+        IEnumerator Co_Move(float start, float end, float length)
         {
             // yoinked from AxkEasing
             // tweaked for good :tm:
@@ -98,7 +107,6 @@ namespace EventTracker.Objects
             var pos = transform.position;
             pos.x = EventTracker.Settings.X.Value;
             pos.y = start;
-            _opacity = opacity_start;
             transform.position = pos;
             yield return null;
 
@@ -106,17 +114,35 @@ namespace EventTracker.Objects
             {
                 float dist = t2 / length;
                 pos.y = AxKEasing.EaseOutExpo(start, end, dist);
-                _opacity = AxKEasing.Linear(opacity_start, opacity_end, dist);
                 transform.position = pos;
                 yield return null;
             }
 
             pos.y = end;
-            _opacity = opacity_end;
             transform.position = pos;
             Done();
 
             yield return null;
+        }
+
+        IEnumerator Co_Opacity(float start, float end, float length)
+        {
+            float t2 = 0f;
+            _opacity = start;
+            yield return null;
+
+            for (t2 += Time.unscaledDeltaTime; t2 < length; t2 += Time.unscaledDeltaTime)
+            {
+                float dist = t2 / length;
+                _opacity = AxKEasing.Linear(start, end, dist);
+                yield return null;
+            }
+
+            _opacity = end;
+            Done();
+
+            yield return null;
+
         }
 
         public void Move(bool end)
@@ -125,7 +151,9 @@ namespace EventTracker.Objects
                 StopCoroutine(_easer);
             var pos = Screen.height - (index * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value;
             var pre = pos - EventTracker.Settings.Padding.Value;
-            _easer = StartCoroutine(Co_Move(pre, pos, 1 / speed, _opacity, end ? 0 : (EventTracker.Settings.EndingOnly.Value ? 0 : 1)));
+            _easer = StartCoroutine(Co_Move(pre, pos, 1 / speed));
+            if (end)
+                ChangeOpacity(0);
         }
 
         public void Reveal()

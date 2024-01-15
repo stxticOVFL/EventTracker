@@ -1,13 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using UnityEngine;
 
 namespace EventTracker.Objects
 {
     public class TrackerHolder : MonoBehaviour
     {
+        public static bool hidden = false;
+
         private Canvas _canvas;
         private GameObject _textBase;
         public bool revealed = false;
@@ -33,8 +37,11 @@ namespace EventTracker.Objects
             if (!LevelRush.IsLevelRush())
             {
                 string path = GhostRecorder.GetCompressedSavePathForLevel(EventTracker.Game.GetCurrentLevel());
-                path = Path.GetDirectoryName(path);
-                path += "/trackerPB.txt";
+                path = Path.GetDirectoryName(path) + "/";
+                string file = EventTracker.Settings.ReadFilename.Value;
+                if (!EventTracker.Settings.AdvancedMode.Value)
+                    file = "trackerPB.txt";
+                path += file;
 
                 if (File.Exists(path))
                 {
@@ -79,7 +86,7 @@ namespace EventTracker.Objects
                     item.Move(item.index < 0);
                     if (item.index < 0)
                     {
-                        if (item.time != null)
+                        if (!item.pbDiff)
                             active--;
                         item.leaving = true;
                     }
@@ -150,14 +157,33 @@ namespace EventTracker.Objects
             return newText;
         }
 
+        public void ToggleVisibility()
+        {
+            if (revealed) return;
+            hidden = !hidden;
+            foreach (Transform child in transform)
+            {
+                if (!child.gameObject.activeSelf)
+                    continue;
+                child.GetComponent<TrackerItem>().ChangeOpacity(hidden ? 0 : 1);
+            }
+        }
+
         public void Reveal(bool pb, bool finished)
         {
-            revealed = true;
+            if (!finished)
+            {
+                PushText("DNF", new Color32(191, 120, 48, 255), false, false);
+                if (!EventTracker.Settings.AdvancedMode.Value)
+                    return;
+            }
 
-            if (!pb && pools != null && finished)
+            long time = EventTracker.Game.GetCurrentLevelTimerMicroseconds();
+
+            if (!EventTracker.Settings.AdvancedMode.Value && !pb && pools != null)
             {
                 // we might not have our actual PB but it might be better than what we have on record
-                if (EventTracker.Game.GetCurrentLevelTimerMicroseconds() < pools["Goal"][0].Item2)
+                if (time < pools["Goal"][0].Item2)
                     pb = true;
             }
 
@@ -166,13 +192,46 @@ namespace EventTracker.Objects
             string path = GhostRecorder.GetCompressedSavePathForLevel(EventTracker.Game.GetCurrentLevel());
             if (!LevelRush.IsLevelRush())
             {
-                path = Path.GetDirectoryName(path);
-                path += "/trackerPB.txt";
+                path = Path.GetDirectoryName(path) + "/";
+                if (!EventTracker.Settings.AdvancedMode.Value)
+                {
+                    path += "trackerPB.txt";
 
-                if (File.Exists(path) && !pb)
-                    path = Path.GetDirectoryName(path) + "/tracker.txt";
-                else if (File.Exists(path))
-                    File.Copy(path, Path.GetDirectoryName(path) + "/trackerOldPB.txt", true);
+                    if (File.Exists(path) && !pb)
+                        path = Path.GetDirectoryName(path) + "/tracker.txt";
+                    else if (File.Exists(path))
+                        File.Copy(path, Path.GetDirectoryName(path) + "/trackerOldPB.txt", true);
+                }
+                else
+                {
+                    float ftime = time / 1e6f;
+                    float fastest = float.MaxValue;
+                    if (!pb)
+                    {
+                        foreach (string filename in Directory.EnumerateFiles(path))
+                        {
+                            try
+                            {
+                                var split = filename.Split('-');
+                                if (split.Last() == "DNF") continue;
+                                var fnameTime = float.Parse(split[1]);
+                                if (fastest > fnameTime)
+                                    fastest = fnameTime;
+                            }
+                            catch { continue; }
+                        }
+                        if (ftime > fastest)
+                            pb = true;
+                    }
+                    if (pb)
+                    {
+                        path += $"tracker-{ftime:0.000}";
+                        if (!finished) path += "-DNF";
+                        path += ".txt";
+                    }
+                    else if (finished) path = "tracker.txt";
+                    else return;
+                }
 
                 try
                 {
@@ -189,16 +248,19 @@ namespace EventTracker.Objects
             {
                 if (child.GetSiblingIndex() == 0) continue;
                 var item = child.GetComponent<TrackerItem>();
-                if (item.time != null || EventTracker.Settings.PBs.Value)
-                    item.Reveal();
-                item.scroll = scroll;
-                if (child.GetSiblingIndex() == 1)
+                if (finished)
                 {
-                    // check the first real item
-                    // if it's over the height we start Scroll Moding :tm:
-                    if (child.position.y > Screen.height)
-                        scroll = child.position.y;
+                    if (!item.pbDiff || EventTracker.Settings.PBs.Value)
+                        item.Reveal();
                     item.scroll = scroll;
+                    if (child.GetSiblingIndex() == 1)
+                    {
+                        // check the first real item
+                        // if it's over the height we start Scroll Moding :tm:
+                        if (child.position.y > Screen.height)
+                            scroll = child.position.y;
+                        item.scroll = scroll;
+                    }
                 }
                 if (item.time != null)
                 {
@@ -208,7 +270,7 @@ namespace EventTracker.Objects
                         if (pools != null)
                         {
                             var diffitem = transform.GetChild(child.GetSiblingIndex() + 1).GetComponent<TrackerItem>();
-                            if (diffitem.time != null) throw new Exception();
+                            if (!diffitem.pbDiff) throw new Exception();
                             diff = diffitem.text.TrimStart();
                         }
                     }
@@ -217,34 +279,41 @@ namespace EventTracker.Objects
                 }
             }
 
-            var goal = PushText("Goal", new Color32(0xFF, 0xCF, 0x40, 255), true, true);
-            goal.scroll = scroll;
-            goal.transform.position = new Vector3(EventTracker.Settings.X.Value, Screen.height - (--active * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value, 0);
-
-            // PB diff, basically copy
-            if (pools != null)
+            if (finished)
             {
-                var goald = transform.GetChild(transform.childCount - 1).GetComponent<TrackerItem>();
-                goald.gameObject.SetActive(true);
-                goald.pbDiff = true;
-                goald.scroll = scroll;
-                goald.transform.position = new Vector3(EventTracker.Settings.X.Value, Screen.height - (active * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value, 0);
-                stream?.WriteLine($"{goal.text,-20}\t{goal.time}\t{goal.longTime,14}\t!\t{goald.text.TrimStart()}");
+                var goal = PushText("Goal", new Color32(0xFF, 0xCF, 0x40, 255), true, true);
+                goal.scroll = scroll;
+                goal.transform.position = new Vector3(EventTracker.Settings.X.Value, Screen.height - (--active * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value, 0);
+
+                // PB diff, basically copy
+                if (pools != null)
+                {
+                    var goald = transform.GetChild(transform.childCount - 1).GetComponent<TrackerItem>();
+                    goald.gameObject.SetActive(true);
+                    goald.pbDiff = true;
+                    goald.scroll = scroll;
+                    goald.transform.position = new Vector3(EventTracker.Settings.X.Value, Screen.height - (active * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value, 0);
+                    stream?.WriteLine($"{goal.text,-20}\t{goal.time}\t{goal.longTime,14}\t!\t{goald.text.TrimStart()}");
+                }
+                else
+                    stream?.WriteLine($"{goal.text,-20}\t{goal.time}\t{goal.longTime,14}\t!");
             }
-            else
-                stream?.WriteLine($"{goal.text,-20}\t{goal.time}\t{goal.longTime,14}\t!");
 
             if (stream != null)
             {
-                var notif = PushText($"(saved to {Path.GetFileName(path)}!)", Color.white, false, true);
+                var notif = PushText($"(saved to {Path.GetFileName(path)}!)", Color.white, false, finished);
                 notif.time = null; // but not pbdiff
-                notif.scroll = scroll;
-                notif.transform.position = new Vector3(EventTracker.Settings.X.Value, Screen.height - (active * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value, 0);
+                if (finished)
+                {
+                    notif.scroll = scroll;
+                    notif.transform.position = new Vector3(EventTracker.Settings.X.Value, Screen.height - (active * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value, 0);
+                }
 
                 stream.Close();
                 file.Close();
             }
 
+            revealed = finished;
         }
     }
 }

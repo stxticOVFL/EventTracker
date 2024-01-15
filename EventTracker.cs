@@ -1,4 +1,6 @@
 ﻿using MelonLoader;
+using UnityEngine;
+using UniverseLib.Input;
 
 namespace EventTracker
 {
@@ -18,7 +20,8 @@ namespace EventTracker
         }
 
         private void OnLevelLoadComplete()
-        {
+        { 
+
             holder = null;
             if (Settings.Enabled.Value)
             {
@@ -31,10 +34,19 @@ namespace EventTracker
             }
         }
 
+        public override void OnUpdate()
+        {
+            if (holder != null && InputManager.GetKeyDown(Settings.ToggleKey.Value))
+                holder.ToggleVisibility();
+            if (Hooks.dnfTimer > 0)
+                Hooks.dnfTimer -= Time.unscaledDeltaTime;
+        }
+
         public static class Settings
         {
             public static MelonPreferences_Category MainCategory;
             public static MelonPreferences_Category EventsCategory;
+            public static MelonPreferences_Category AdvancedCategory;
 
             public static MelonPreferences_Entry<bool> Enabled;
             public static MelonPreferences_Entry<int> X;
@@ -46,6 +58,7 @@ namespace EventTracker
             public static MelonPreferences_Entry<bool> EndingOnly;
             public static MelonPreferences_Entry<bool> PBs;
             public static MelonPreferences_Entry<bool> PBEndingOnly;
+            public static MelonPreferences_Entry<KeyCode> ToggleKey;
 
             public static MelonPreferences_Entry<bool> Fire;
             public static MelonPreferences_Entry<bool> Discard;
@@ -57,6 +70,11 @@ namespace EventTracker
             public static MelonPreferences_Entry<bool> EnemyDeath;
             public static MelonPreferences_Entry<bool> TrivialDeath;
             public static MelonPreferences_Entry<bool> BossWaves;
+            public static MelonPreferences_Entry<bool> RedDestructable;
+            public static MelonPreferences_Entry<bool> OtherDestructables;
+
+            public static MelonPreferences_Entry<bool> AdvancedMode;
+            public static MelonPreferences_Entry<string> ReadFilename;
 
 
             public static void Register()
@@ -72,8 +90,9 @@ namespace EventTracker
                 EndingX = MainCategory.CreateEntry("Ending X Position", 30);
                 ScrollSpeed = MainCategory.CreateEntry("Scroll Speed", 30f, description: "The scroll speed to use at the end if it goes over the top of the screen.");
                 PBs = MainCategory.CreateEntry("Show PBs", true, description: "Shows a comparison between your PB and this run.");
-                PBEndingOnly = MainCategory.CreateEntry("Only show comparison at end", true, is_hidden: !PBs.Value);
-                PBs.OnEntryValueChanged.Subscribe((bool before, bool after) => PBEndingOnly.IsHidden = !after);
+                PBEndingOnly = MainCategory.CreateEntry("Only show comparison at end", true);
+
+                ToggleKey = MainCategory.CreateEntry("Toggle Visibility Key", KeyCode.Tab, description: "Pressing the assigned key will toggle display of the sidebar display.");
 
                 EventsCategory = MelonPreferences.CreateCategory("Event Tracker Event Customization");
 
@@ -87,6 +106,14 @@ namespace EventTracker
                 EnemyDeath = EventsCategory.CreateEntry("Enemy Death", true, description: "NOTE: This event provides synchronization!\nEvents could fall out of sync for PB comparsion!");
                 TrivialDeath = EventsCategory.CreateEntry("Non-counted Enemy Death", false, description: "e.g. book of life stages");
                 BossWaves = EventsCategory.CreateEntry("Boss Waves", true, description: "NOTE: This event provides synchronization!\nEvents could fall out of sync for PB comparsion!");
+
+                RedDestructable = EventsCategory.CreateEntry("Important Destructables", true, description: "e.g. red walls and floors");
+                OtherDestructables = EventsCategory.CreateEntry("Other Destructables", false, description: "e.g. chests, crystals");
+
+                AdvancedCategory = MelonPreferences.CreateCategory("Event Tracker Advanced");
+
+                AdvancedMode = AdvancedCategory.CreateEntry("Advanced Mode", false, description: "Files will be written to like \"tracker-12.345-DNF.txt\" and \"tracker-67.890.txt\" instead of managing PBs for you.\nThis enabled DNFs to be written.");
+                ReadFilename = AdvancedCategory.CreateEntry("Comparison File", "trackerPB.txt", description: "The file to compare against in advanced mode.");
             }
         }
 

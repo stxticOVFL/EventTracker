@@ -16,8 +16,9 @@ namespace EventTracker
         public static bool isJump = true;
 
         static bool boof;
-        static bool forced;
-        static bool finished;
+        static bool dnf;
+
+        public static float dnfTimer;
 
         static TrackerItem burst = null;
 
@@ -223,10 +224,12 @@ namespace EventTracker
         [HarmonyPatch(typeof(LevelGate), "OnTriggerStay")]
         private static void OnTriggerStay(ref LevelGate __instance)
         {
-            if (!finished) finished = __instance.Unlocked;
-            forced = true;
-            OnLevelWin();
-            forced = false;
+            dnf = !__instance.Unlocked;
+            if (!dnf || dnfTimer <= 0)
+                OnLevelWin();
+            if (dnf)
+                dnfTimer = 3;
+            dnf = false;
         }
 
         [HarmonyPrefix]
@@ -246,8 +249,7 @@ namespace EventTracker
 
                 Game game = Singleton<Game>.Instance;
                 long best = GameDataManager.levelStats[game.GetCurrentLevel().levelID].GetTimeBestMicroseconds();
-                EventTracker.holder.Reveal(best > game.GetCurrentLevelTimerMicroseconds(), !forced || finished);
-                finished = false;
+                EventTracker.holder.Reveal(best > game.GetCurrentLevelTimerMicroseconds(), !dnf);
             }
             catch (Exception e)
             {
