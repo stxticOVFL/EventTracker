@@ -7,6 +7,7 @@ A heavily customizable event tracker mod for Neon White to help with speedrunnin
 - Precise time tracking of various events (e.g. killing an enemy, discarding a weapon card)
 - Comparing times to recorded personal bests
 - Customizable sidebar display (X/Y/padding/entry count)
+- Pick and choose which events get logged
 - Saving tracked events to disk as easily readable files (in the ghost directory as `tracker.txt` and others)
 - Scrolling display at the end
   - Can also be set to _only_ display at the end of a run, as can PB differences
