@@ -65,12 +65,12 @@ namespace EventTracker
 
                 Enabled = MainCategory.CreateEntry("Enabled", true);
                 X = MainCategory.CreateEntry("X Position", 30);
-                Y = MainCategory.CreateEntry("Y Position", 200);
-                Padding = MainCategory.CreateEntry("Padding", 22, description: "The padding between each entry in the list.");
+                Y = MainCategory.CreateEntry("Y Position", 240);
+                Padding = MainCategory.CreateEntry("Padding", 25, description: "The padding between each entry in the list.");
                 Limit = MainCategory.CreateEntry("Entry Limit", 10);
                 EndingOnly = MainCategory.CreateEntry("Show on Ending Only", false);
                 EndingX = MainCategory.CreateEntry("Ending X Position", 30);
-                ScrollSpeed = MainCategory.CreateEntry("Scroll Speed", 30f, description: "The scroll speed to use at the end if it goes over or under the top or bottom of the screen.");
+                ScrollSpeed = MainCategory.CreateEntry("Scroll Speed", 30f, description: "The scroll speed to use at the end if it goes over the top of the screen.");
                 PBs = MainCategory.CreateEntry("Show PBs", true, description: "Shows a comparison between your PB and this run.");
                 PBEndingOnly = MainCategory.CreateEntry("Only show comparison at end", true, is_hidden: !PBs.Value);
                 PBs.OnEntryValueChanged.Subscribe((bool before, bool after) => PBEndingOnly.IsHidden = !after);
