@@ -15,7 +15,7 @@ A heavily customizable event tracker mod for Neon White to help with speedrunnin
 
 1. Download [MelonLoader](https://github.com/LavaGang/MelonLoader/releases/latest) and install it onto your `Neon White.exe`.
 2. Run the game once. This will create required folders.
-3. Download the **Mono** version of [Melon Preferences Manager](https://github.com/sinai-dev/MelonPreferencesManager/releases/latest), and put the .DLLs from that zip into the `Mods` folder of your Neon White install.
+3. Download the **Mono** version of [Melon Preferences Manager](https://github.com/Bluscream/MelonPreferencesManager/releases/latest), and put the .DLLs from that zip into the `Mods` folder of your Neon White install.
     - The preferences manager is required to customize the event tracker, using F5 (by default).
 4. Download `EventTracker.dll` from the [Releases page](https://github.com/stxticOVFL/EventTracker/releases/latest) and drop it in the `Mods` folder.
 
