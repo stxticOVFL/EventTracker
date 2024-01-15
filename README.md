@@ -33,7 +33,7 @@ Once your references are correct, build using the keybind or like the picture be
 Make any edits as needed, and make a PR for review. PRs are very appreciated.
 
 ### Additional Notes
-It's recommended to add add `--melonloader.hideconsole` to your game launch properties (Steam -> Right click Neon White -> Properties -> Launch Options) to hide the console that MelonLoader spawns.
+It's recommended to add `--melonloader.hideconsole` to your game launch properties (Steam -> Right click Neon White -> Properties -> Launch Options) to hide the console that MelonLoader spawns.
 
 ![image](https://github.com/stxticOVFL/EventTracker/assets/29069561/9c037da5-7323-435f-9e55-80904f799ae0)
 ![image](https://github.com/stxticOVFL/EventTracker/assets/29069561/4a4fa519-15b4-486f-a354-6ff7d0672df4)
