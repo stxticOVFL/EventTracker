@@ -21,7 +21,7 @@ A heavily customizable event tracker mod for Neon White to help with speedrunnin
 
 ## Building & Contributing
 This project uses Visual Studio 2022 as its project manager. When opening the Visual Studio solution, ensure your references are corrected by right clicking and selecting `Add Reference...` as shown below. 
-Most will be in `Neon White_data/Managed`. Some will be in `MelonLoader/net35`, **not** `net6`. Selected the `MelonPrefManager` mod for that reference.
+Most will be in `Neon White_data/Managed`. Some will be in `MelonLoader/net35`, **not** `net6`. Select the `MelonPrefManager` mod for that reference.
 
 ![image](https://github.com/stxticOVFL/EventTracker/assets/29069561/ed3d94e3-52f2-48ea-9d69-84b018cf4336)
 
