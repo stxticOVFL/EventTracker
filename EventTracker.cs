@@ -27,6 +27,8 @@ namespace EventTracker
             {
                 Hooks.isSwap = true;
                 Hooks.isJump = true;
+                Hooks.dnfTimer = 0;
+                Hooks.redwood = 0;
                 if (Game.GetCurrentLevel().isBossFight)
                     Hooks.bossWave = 1;
                 else Hooks.bossWave = 0;
@@ -53,6 +55,7 @@ namespace EventTracker
             public static MelonPreferences_Entry<int> Y;
             public static MelonPreferences_Entry<int> Padding;
             public static MelonPreferences_Entry<int> Limit;
+            public static MelonPreferences_Entry<bool> Animated;
             public static MelonPreferences_Entry<int> EndingX;
             public static MelonPreferences_Entry<float> ScrollSpeed;
             public static MelonPreferences_Entry<bool> EndingOnly;
@@ -82,17 +85,18 @@ namespace EventTracker
                 MainCategory = MelonPreferences.CreateCategory("Event Tracker");
 
                 Enabled = MainCategory.CreateEntry("Enabled", true);
+                ToggleKey = MainCategory.CreateEntry("Toggle Visibility Key", KeyCode.Tab, description: "Pressing the assigned key will toggle display of the sidebar display.");
                 X = MainCategory.CreateEntry("X Position", 30);
                 Y = MainCategory.CreateEntry("Y Position", 240);
                 Padding = MainCategory.CreateEntry("Padding", 25, description: "The padding between each entry in the list.");
                 Limit = MainCategory.CreateEntry("Entry Limit", 10);
+                Animated = MainCategory.CreateEntry("Movement Animation", true, description: "Enables the movement animation. Disable this if you are getting lag spikes.");
                 EndingOnly = MainCategory.CreateEntry("Show on Ending Only", false);
                 EndingX = MainCategory.CreateEntry("Ending X Position", 30);
                 ScrollSpeed = MainCategory.CreateEntry("Scroll Speed", 30f, description: "The scroll speed to use at the end if it goes over the top of the screen.");
                 PBs = MainCategory.CreateEntry("Show PBs", true, description: "Shows a comparison between your PB and this run.");
                 PBEndingOnly = MainCategory.CreateEntry("Only show comparison at end", true);
 
-                ToggleKey = MainCategory.CreateEntry("Toggle Visibility Key", KeyCode.Tab, description: "Pressing the assigned key will toggle display of the sidebar display.");
 
                 EventsCategory = MelonPreferences.CreateCategory("Event Tracker Event Customization");
 
@@ -107,7 +111,7 @@ namespace EventTracker
                 TrivialDeath = EventsCategory.CreateEntry("Non-counted Enemy Death", false, description: "e.g. book of life stages");
                 BossWaves = EventsCategory.CreateEntry("Boss Waves", true, description: "NOTE: This event provides synchronization!\nEvents could fall out of sync for PB comparsion!");
 
-                RedDestructable = EventsCategory.CreateEntry("Important Destructables", true, description: "e.g. red walls and floors");
+                RedDestructable = EventsCategory.CreateEntry("Important Destructables", true, description: "e.g. red walls and floors\nNOTE: This event provides synchronization!\nEvents could fall out of sync for PB comparsion!");
                 OtherDestructables = EventsCategory.CreateEntry("Other Destructables", false, description: "e.g. chests, crystals");
 
                 AdvancedCategory = MelonPreferences.CreateCategory("Event Tracker Advanced");

@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using UnityEngine;
 
 namespace EventTracker.Objects
@@ -20,6 +18,13 @@ namespace EventTracker.Objects
         Dictionary<string, List<Tuple<string, long>>> pools;
         string currentPool;
         int poolIndex;
+
+        public static string GetGhostDirectory()
+        {
+            string path = GhostRecorder.GetCompressedSavePathForLevel(EventTracker.Game.GetCurrentLevel());
+            path = Path.GetDirectoryName(path) + "/";
+            return path;
+        }
 
         internal static void Initialize() => new GameObject("TrackerHolder", typeof(TrackerHolder));
 
@@ -45,6 +50,11 @@ namespace EventTracker.Objects
 
                 if (File.Exists(path))
                 {
+                    if (EventTracker.Settings.AdvancedMode.Value)
+                    {
+                        var text = PushText($"(comparing to {file})");
+                        text.time = null;
+                    }
                     bool header = true;
                     pools = [];
                     currentPool = "";
@@ -70,91 +80,99 @@ namespace EventTracker.Objects
             EventTracker.holder = this;
         }
 
-        public void PushText(string text) => PushText(text, Color.white);
+        public TrackerItem PushText(string text) => PushText(text, Color.white);
 
         public TrackerItem PushText(string text, Color border, bool landmark = false, bool goal = false)
         {
-            if (revealed && !goal) return null;
-            if (active > EventTracker.Settings.Limit.Value && !goal)
+            try
             {
-                foreach (Transform child in transform)
+                if (revealed && !goal) return null;
+                if (active > EventTracker.Settings.Limit.Value && !goal)
                 {
-                    if (child.GetSiblingIndex() == 0) continue;
-                    var item = child.GetComponent<TrackerItem>();
-                    item.index--;
-                    if (item.leaving || !child.gameObject.activeSelf) continue;
-                    item.Move(item.index < 0);
-                    if (item.index < 0)
+                    foreach (Transform child in transform)
                     {
-                        if (!item.pbDiff)
-                            active--;
-                        item.leaving = true;
-                    }
-                }
-            }
-            var newText = Instantiate(_textBase, transform).GetComponent<TrackerItem>();
-            newText.name = "Tracker Item";
-            newText.text = text;
-            newText.longTime = EventTracker.Game.GetCurrentLevelTimerMicroseconds();
-            newText.time = Game.GetTimerFormattedMillisecond(newText.longTime);
-            newText.color = border;
-            newText.gameObject.SetActive(true);
-            newText.index = active++;
-            newText.holder = this;
-            newText.landmark = landmark;
-            newText.goal = goal;
-
-            if (pools != null)
-            {
-                if (landmark)
-                {
-                    poolIndex = 0;
-                    // check pools
-                    if (text.Contains("Demons"))
-                    {
-                        string num = text.Split(' ')[0];
-                        // don't look directly, look by number
-                        foreach (string key in pools.Keys)
+                        if (child.GetSiblingIndex() == 0) continue;
+                        var item = child.GetComponent<TrackerItem>();
+                        item.index--;
+                        if (item.leaving || !child.gameObject.activeSelf) continue;
+                        item.Move(item.index < 0);
+                        if (item.index < 0)
                         {
-                            if (key.StartsWith(num))
-                                currentPool = key;
+                            if (!item.pbDiff)
+                                active--;
+                            item.leaving = true;
                         }
                     }
-                    else // it just is the key
-                        currentPool = text;
                 }
+                var newText = Instantiate(_textBase, transform).GetComponent<TrackerItem>();
+                newText.name = "Tracker Item";
+                newText.text = text;
+                newText.longTime = EventTracker.Game.GetCurrentLevelTimerMicroseconds();
+                newText.time = Game.GetTimerFormattedMillisecond(newText.longTime);
+                newText.color = border;
+                newText.gameObject.SetActive(true);
+                newText.index = active++;
+                newText.holder = this;
+                newText.landmark = landmark;
+                newText.goal = goal;
 
-                try
+                if (pools != null)
                 {
-                    int index = poolIndex;
-                    var desctime = pools[currentPool][index];
-                    while (true)
+                    if (landmark)
                     {
-                        index++;
-                        if (desctime.Item1 == text.TrimEnd())
+                        poolIndex = 0;
+                        // check pools
+                        if (text.Contains("Demon"))
                         {
-                            poolIndex = index;
-                            break;
+                            string num = text.Split(' ')[0];
+                            // don't look directly, look by number
+                            foreach (string key in pools.Keys)
+                            {
+                                if (key.StartsWith(num))
+                                    currentPool = key;
+                            }
                         }
-                        desctime = pools[currentPool][index];
+                        else // it just is the key
+                            currentPool = text;
                     }
-                    var diff = newText.longTime - desctime.Item2;
-                    string sign = diff.ToString("+0;-#").First().ToString(); // lol
-                    diff = Math.Abs(diff);
 
-                    var diffText = Instantiate(newText.gameObject, transform).GetComponent<TrackerItem>();
-                    diffText.name = "PB Diff";
-                    diffText.text = $"{sign,32}{Game.GetTimerFormattedMillisecond(diff)}";
-                    diffText.time = null;
-                    diffText.pbDiff = true;
-                    diffText.color = sign == "-" ? Color.green : Color.red;
+                    try
+                    {
+                        int index = poolIndex;
+                        var desctime = pools[currentPool][index];
+                        while (true)
+                        {
+                            index++;
+                            if (desctime.Item1 == text.TrimEnd())
+                            {
+                                poolIndex = index;
+                                break;
+                            }
+                            desctime = pools[currentPool][index];
+                        }
+                        var diff = newText.longTime - desctime.Item2;
+                        string sign = diff.ToString("+0;-#").First().ToString(); // lol
+                        diff = Math.Abs(diff);
 
-                    diffText.gameObject.SetActive(EventTracker.Settings.PBs.Value && !EventTracker.Settings.PBEndingOnly.Value);
+                        var diffText = Instantiate(newText.gameObject, transform).GetComponent<TrackerItem>();
+                        diffText.name = "PB Diff";
+                        diffText.text = $"{sign,32}{Game.GetTimerFormattedMillisecond(diff)}";
+                        diffText.time = null;
+                        diffText.pbDiff = true;
+                        diffText.color = sign == "-" ? Color.green : Color.red;
+
+                        diffText.gameObject.SetActive(EventTracker.Settings.PBs.Value && !EventTracker.Settings.PBEndingOnly.Value);
+                    }
+                    catch { }
                 }
-                catch { }
-            }
 
-            return newText;
+                return newText;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"error during PushText!!! {e}");
+                return null;
+            }
         }
 
         public void ToggleVisibility()
@@ -187,12 +205,10 @@ namespace EventTracker.Objects
                     pb = true;
             }
 
-            FileStream file = null;
             StreamWriter stream = null;
-            string path = GhostRecorder.GetCompressedSavePathForLevel(EventTracker.Game.GetCurrentLevel());
+            string path = GetGhostDirectory();
             if (!LevelRush.IsLevelRush())
             {
-                path = Path.GetDirectoryName(path) + "/";
                 if (!EventTracker.Settings.AdvancedMode.Value)
                 {
                     path += "trackerPB.txt";
@@ -215,12 +231,12 @@ namespace EventTracker.Objects
                                 var split = filename.Split('-');
                                 if (split.Last() == "DNF") continue;
                                 var fnameTime = float.Parse(split[1]);
-                                if (fastest > fnameTime)
+                                if (fastest < fnameTime)
                                     fastest = fnameTime;
                             }
                             catch { continue; }
                         }
-                        if (ftime > fastest)
+                        if (ftime < fastest)
                             pb = true;
                     }
                     if (pb)
@@ -229,14 +245,13 @@ namespace EventTracker.Objects
                         if (!finished) path += "-DNF";
                         path += ".txt";
                     }
-                    else if (finished) path = "tracker.txt";
+                    else if (finished) path += "tracker.txt";
                     else return;
                 }
 
                 try
                 {
-                    file = File.OpenWrite(path);
-                    stream = new StreamWriter(file);
+                    stream = new StreamWriter(path, false);
                 }
                 catch { }
             }
@@ -301,6 +316,8 @@ namespace EventTracker.Objects
 
             if (stream != null)
             {
+                stream.Close();
+
                 var notif = PushText($"(saved to {Path.GetFileName(path)}!)", Color.white, false, finished);
                 notif.time = null; // but not pbdiff
                 if (finished)
@@ -308,9 +325,6 @@ namespace EventTracker.Objects
                     notif.scroll = scroll;
                     notif.transform.position = new Vector3(EventTracker.Settings.X.Value, Screen.height - (active * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value, 0);
                 }
-
-                stream.Close();
-                file.Close();
             }
 
             revealed = finished;

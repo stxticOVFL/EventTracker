@@ -9,7 +9,7 @@ using HarmonyLib;
 namespace EventTracker
 {
     [HarmonyPatch]
-    public class Hooks
+    static public class Hooks
     {
         public static int bossWave = 0;
         public static bool isSwap = true;
@@ -19,6 +19,7 @@ namespace EventTracker
         static bool dnf;
 
         public static float dnfTimer;
+        public static int redwood = 0;
 
         static TrackerItem burst = null;
 
@@ -84,6 +85,8 @@ namespace EventTracker
                     EventTracker.holder.PushText($"Pick up {GetCardName(card.data)}", card.data.cardColor);
                 return;
             }
+            if (card.data.cardType != PlayerCardData.Type.WeaponProjectile || card.data.cardType != PlayerCardData.Type.WeaponHitscan) 
+                return;
             if (__result && EventTracker.Settings.Fire.Value)
             {
                 if (__instance._bulletsFiredThisBurst == 0)
@@ -215,9 +218,33 @@ namespace EventTracker
 
         [HarmonyPrefix]
         [HarmonyPatch(typeof(Enemy), "ForceDie")]
-        static void EnemyForceDie(ref Enemy __instance)
+        static void EnemyForceDie(ref Enemy __instance) 
         {
             EnemyDie(ref __instance);
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(BaseDamageable), "Die")]
+        static void Breakable(ref BaseDamageable __instance)
+        {
+            if (__instance._damageableType == BaseDamageable.DamageableType.Wall)
+            {
+                if (EventTracker.Settings.RedDestructable.Value)
+                    EventTracker.holder.PushText($"Break red-wood {++redwood}", new Color32(0xE1, 0x60, 0x58, 255), true);
+            }
+            else if (EventTracker.Settings.OtherDestructables.Value)
+            {
+                if (__instance._damageableType == BaseDamageable.DamageableType.Enemy) 
+                    return; // we don't do that here
+
+                string damageable = ((BaseDamageable.DamageableType)((int)__instance._damageableType / 10 * 10)).ToString(); // handle crystal types and cast to string
+                if (damageable == "EnvironmentPortal")
+                    return; // wtf *is* that
+                if (damageable == "Platform")
+                    damageable = "Glass";
+
+                EventTracker.holder.PushText($"Break {damageable}");
+            }
         }
 
         [HarmonyPostfix]

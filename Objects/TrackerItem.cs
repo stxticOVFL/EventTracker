@@ -38,10 +38,16 @@ namespace EventTracker.Objects
             else _text.text = text;
         }
 
-        public void ChangeOpacity(float opacity, float? start = null) { 
-            if (_opacityEaser != null)
-                StopCoroutine(_opacityEaser);
-            _opacityEaser = StartCoroutine(Co_Opacity(start ?? _opacity, opacity, 1 / speed));
+        public void ChangeOpacity(float opacity, float? start = null)
+        {
+            if (!EventTracker.Settings.Animated.Value)
+                _opacity = opacity;
+            else
+            {
+                if (_opacityEaser != null)
+                    StopCoroutine(_opacityEaser);
+                _opacityEaser = StartCoroutine(Co_Opacity(start ?? _opacity, opacity, 1 / speed));
+            }
         }
 
         private void Start()
@@ -63,10 +69,7 @@ namespace EventTracker.Objects
             UpdateText();
             if (!goal && (!pbDiff || !EventTracker.Settings.PBEndingOnly.Value))
             {
-                var pos = Screen.height - (index * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value;
-                var pre = pos - EventTracker.Settings.Padding.Value;
-
-                _easer = StartCoroutine(Co_Move(pre, pos, 1 / speed));
+                Move(false, true);
                 if (!EventTracker.Settings.EndingOnly.Value && !TrackerHolder.hidden)
                     ChangeOpacity(1);
             }
@@ -76,23 +79,23 @@ namespace EventTracker.Objects
         {
             UpdateText();
             var pos = transform.position;
+            pos.x = EventTracker.Settings.X.Value;
             if (scroll != 0)
             {
                 pos.y += EventTracker.Settings.ScrollSpeed.Value * Time.unscaledDeltaTime;
                 if (pos.y > scroll)
                     pos.y -= scroll + EventTracker.Settings.Padding.Value;
-                transform.position = pos;
             }
             if (holder.revealed)
             {
                 if (_opacity < 1)
                     _opacity += Time.unscaledDeltaTime * speed; // just do this one linearly idrc
                 pos.x = EventTracker.Settings.EndingX.Value;
-                transform.position = pos;
             }
+            transform.position = pos;
         }
 
-        void Done()
+        void MoveDone()
         {
             _easer = null;
             if (leaving)
@@ -120,7 +123,7 @@ namespace EventTracker.Objects
 
             pos.y = end;
             transform.position = pos;
-            Done();
+            MoveDone();
 
             yield return null;
         }
@@ -139,19 +142,30 @@ namespace EventTracker.Objects
             }
 
             _opacity = end;
-            Done();
+            _opacityEaser = null;
 
             yield return null;
 
         }
 
-        public void Move(bool end)
+        public void Move(bool end, bool transition = true)
         {
-            if (_easer != null)
-                StopCoroutine(_easer);
-            var pos = Screen.height - (index * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value;
-            var pre = pos - EventTracker.Settings.Padding.Value;
-            _easer = StartCoroutine(Co_Move(pre, pos, 1 / speed));
+            var endPos = Screen.height - (index * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value;
+            if (!EventTracker.Settings.Animated.Value || (_opacity == 0 && !transition))
+            {
+                var pos = transform.position;
+                pos.y = endPos;
+                transform.position = pos;
+                MoveDone();
+            }
+            else
+            {
+                if (_easer != null)
+                    StopCoroutine(_easer);
+                var pos = endPos;
+                var pre = pos - EventTracker.Settings.Padding.Value;
+                _easer = StartCoroutine(Co_Move(pre, pos, 1 / speed));
+            }
             if (end)
                 ChangeOpacity(0);
         }
@@ -162,7 +176,7 @@ namespace EventTracker.Objects
             if (_easer != null)
                 StopCoroutine(_easer);
             leaving = false;
-            transform.position = new Vector3(EventTracker.Settings.X.Value, Screen.height - (index * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value, 0);
+            transform.position = new Vector3(EventTracker.Settings.EndingX.Value, Screen.height - (index * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value, 0);
         }
     }
 }
