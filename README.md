@@ -6,11 +6,12 @@ A heavily customizable event tracker mod for Neon White to help with speedrunnin
 ## Features
 - Precise time tracking of various events (e.g. killing an enemy, discarding a weapon card)
 - Comparing times to recorded personal bests
-- Customizable sidebar display (X/Y/padding/entry count)
+- Customizable sidebar display (animation/X/ending X/Y/padding/entry count)
 - Pick and choose which events get logged
 - Saving tracked events to disk as easily readable files (in the ghost directory as `tracker.txt` and others)
 - Scrolling display at the end
   - Can also be set to _only_ display at the end of a run, as can PB differences
+- Toggle visibility of the sidebar on a customizable key press
 
 ## Installation
 
@@ -18,11 +19,15 @@ A heavily customizable event tracker mod for Neon White to help with speedrunnin
 2. Run the game once. This will create required folders.
 3. Download the **Mono** version of [Melon Preferences Manager](https://github.com/Bluscream/MelonPreferencesManager/releases/latest), and put the .DLLs from that zip into the `Mods` folder of your Neon White install.
     - The preferences manager is required to customize the event tracker, using F5 (by default).
-4. Download `EventTracker.dll` from the [Releases page](https://github.com/stxticOVFL/EventTracker/releases/latest) and drop it in the `Mods` folder.
+4. Download the **Mono** version of [UniverseLib](https://github.com/sinai-dev/UniverseLib) and put it in the `Mods` folder.
+    - UniverseLib **is required no matter what.** 
+      - Melon Preferences Manager also requires UniverseLib.
+5. Download `EventTracker.dll` from the [Releases page](https://github.com/stxticOVFL/EventTracker/releases/latest) and drop it in the `Mods` folder.
 
 ## Building & Contributing
 This project uses Visual Studio 2022 as its project manager. When opening the Visual Studio solution, ensure your references are corrected by right clicking and selecting `Add Reference...` as shown below. 
-Most will be in `Neon White_data/Managed`. Some will be in `MelonLoader/net35`, **not** `net6`. Select the `MelonPrefManager` mod for that reference.
+Most will be in `Neon White_data/Managed`. Some will be in `MelonLoader/net35`, **not** `net6`. Select the `MelonPrefManager` and `UniverseLib` mods for those references. 
+If you get any weird errors, try deleting the references and re-adding them manually.
 
 ![image](https://github.com/stxticOVFL/EventTracker/assets/29069561/ed3d94e3-52f2-48ea-9d69-84b018cf4336)
 
