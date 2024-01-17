@@ -227,6 +227,8 @@ namespace EventTracker
         [HarmonyPatch(typeof(BaseDamageable), "Die")]
         static void Breakable(ref BaseDamageable __instance)
         {
+            if (!EventTracker.holder) return;
+
             if (__instance._damageableType == BaseDamageable.DamageableType.Wall)
             {
                 if (EventTracker.Settings.RedDestructable.Value)
