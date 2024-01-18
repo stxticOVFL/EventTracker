@@ -85,7 +85,7 @@ namespace EventTracker
                     EventTracker.holder.PushText($"Pick up {GetCardName(card.data)}", card.data.cardColor);
                 return;
             }
-            if (card.data.cardType != PlayerCardData.Type.WeaponProjectile || card.data.cardType != PlayerCardData.Type.WeaponHitscan) 
+            if (card.data.cardType != PlayerCardData.Type.WeaponProjectile && card.data.cardType != PlayerCardData.Type.WeaponHitscan) 
                 return;
             if (__result && EventTracker.Settings.Fire.Value)
             {
