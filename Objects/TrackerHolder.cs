@@ -2,57 +2,111 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
+using MelonLoader.TinyJSON;
 using UnityEngine;
+using Settings = EventTracker.EventTracker.Settings;
 
 namespace EventTracker.Objects
 {
     public class TrackerHolder : MonoBehaviour
     {
-        public static bool hidden = false;
+        public bool initialized = false;
+        public bool hidden = false;
+        public bool forceHide = false;
 
         private Canvas _canvas;
+        private Transform _realHolder = null;
         private GameObject _textBase;
         public bool revealed = false;
         public int active = 0;
+        private int countOffset = 0;
+
+        public int Count { get { return (revealed ? Settings.EndingLimit.Value : Settings.Limit.Value) + countOffset; } }
+        public float scroll; // used by the items
+        public float emerge;
 
         Dictionary<string, List<Tuple<string, long>>> pools;
         string currentPool;
         int poolIndex;
 
-        public static string GetGhostDirectory()
+        public static Regex regexFilter = null;
+        public static bool regexMatch = true;
+
+        private readonly TrackerItem.Transition _moveX = new(AxKEasing.EaseOutQuint, null);
+        private readonly TrackerItem.Transition _moveY = new(AxKEasing.EaseOutQuint, null);
+        private readonly TrackerItem.Transition _scaleT = new(AxKEasing.EaseOutQuint, null);
+
+        private LevelData loadedLevel = null;
+        private string loadedFile = "";
+
+
+        public static string GetGhostDirectory(LevelData level = null)
         {
-            string path = GhostRecorder.GetCompressedSavePathForLevel(EventTracker.Game.GetCurrentLevel());
+            if (level == null)
+                level = Singleton<Game>.Instance.GetCurrentLevel();
+            string path = GhostRecorder.GetCompressedSavePathForLevel(level);
             path = Path.GetDirectoryName(path) + "/";
             return path;
         }
 
-        internal static void Initialize() => new GameObject("TrackerHolder", typeof(TrackerHolder));
+        internal static void Spawn() => EventTracker.holder = new GameObject("TrackerHolder", typeof(TrackerHolder)).GetComponent<TrackerHolder>();
 
-        private void Start()
+        private void Awake()
         {
-            transform.SetParent(RM.ui.transform, false); // for ease of access while debugging
+            _moveX.speed = 4;
+            _moveY.speed = 4;
+            _scaleT.speed = 4;
 
             // create a canvas for the text to go into
             _canvas = gameObject.AddComponent<Canvas>();
             _canvas.renderMode = RenderMode.ScreenSpaceCamera; // this seems to work better
+
+            _realHolder = new GameObject("Holder").transform;
+            _realHolder.parent = transform;
+            Update();
+
             _textBase = new GameObject("TrackerItemBase", typeof(TrackerItem));
             _textBase.SetActive(false);
-            _textBase.transform.parent = transform;
+            _textBase.GetComponent<TrackerItem>().skip = true;
+            _textBase.transform.localPosition = Vector3.zero;
+            _textBase.transform.parent = _realHolder;
+        }
 
+        public void Clear()
+        {
+
+            revealed = false;
+            initialized = false;
+            active = 0;
+            scroll = 0;
+            emerge = 0;
+            countOffset = 0;
+            poolIndex = 0;
+            foreach (Transform child in _realHolder)
+            {
+                if (child.GetSiblingIndex() == 0) continue;
+                Destroy(child.gameObject);
+            }
+        }
+
+        public void Initialize()
+        {
             if (!LevelRush.IsLevelRush())
             {
-                string path = GhostRecorder.GetCompressedSavePathForLevel(EventTracker.Game.GetCurrentLevel());
-                path = Path.GetDirectoryName(path) + "/";
-                string file = EventTracker.Settings.ReadFilename.Value;
-                if (!EventTracker.Settings.AdvancedMode.Value)
+                loadedLevel = EventTracker.Game.GetCurrentLevel();
+                string path = GetGhostDirectory(loadedLevel);
+                string file = Settings.ReadFilename.Value;
+                if (!Settings.AdvancedMode.Value)
                     file = "trackerPB.txt";
                 path += file;
 
-                if (File.Exists(path))
+                if (File.Exists(path) && path != loadedFile)
                 {
-                    if (EventTracker.Settings.AdvancedMode.Value)
+                    loadedFile = path;
+                    if (Settings.AdvancedMode.Value)
                     {
-                        var text = PushText($"(comparing to {file})");
+                        var text = PushText($"(comparing to {file})", false);
                         text.time = null;
                     }
                     bool header = true;
@@ -77,26 +131,81 @@ namespace EventTracker.Objects
                 }
             }
             currentPool = "";
-            EventTracker.holder = this;
+            initialized = true;
         }
 
-        public TrackerItem PushText(string text) => PushText(text, Color.white);
-
-        public TrackerItem PushText(string text, Color border, bool landmark = false, bool goal = false)
+        public void LoadJSON()
         {
+            EventTracker.JSON.Load();
+            TrackerTrigger.holder = new GameObject("Trigger Holder").transform;
+            foreach (Variant data in EventTracker.JSON.json["triggers"] as ProxyArray)
+                TrackerTrigger.Decode(data);
+
             try
             {
-                if (revealed && !goal) return null;
-                if (active > EventTracker.Settings.Limit.Value && !goal)
+                regexFilter = new(EventTracker.JSON.json["regex"], RegexOptions.Compiled | RegexOptions.IgnoreCase);
+                regexMatch = EventTracker.JSON.json["regexMatch"];
+            }
+            catch
+            {
+                regexFilter = null;
+                EventTracker.JSON.json["regex"] = null;
+                EventTracker.JSON.json["regexMatch"] = new ProxyBoolean(true);
+                EventTracker.JSON.Save();
+            }
+        }
+
+        private void Update()
+        {
+            if (!_moveX.running)
+                _moveX.result = Settings.EndingX.Value;
+            if (!_moveY.running)
+                _moveY.result = Settings.EndingY.Value;
+            if (!_scaleT.running)
+                _scaleT.result = Settings.EndingScale.Value;
+            float x = revealed ? _moveX.result : Settings.X.Value;
+            float y = revealed ? _moveY.result : Settings.Y.Value;
+            float scale = revealed ? _scaleT.result : Settings.Scale.Value;
+            _realHolder.position = new Vector3(x * Screen.width, Screen.height - (y * Screen.height), 0);
+            _realHolder.localScale = new Vector3(scale * (Screen.height / 1080), scale * (Screen.height / 1080), 1);
+            if (forceHide)
+            {
+                _moveX.time = 1;
+                _moveY.time = 1;
+                _scaleT.time = 1;
+            }
+            _moveX.Process();
+            _moveY.Process();
+            _scaleT.Process();
+        }
+
+        public TrackerItem PushText(string text, bool skip) => PushText(text, Color.clear, skip);
+
+        public TrackerItem PushText(string text, Color border, bool skip, bool landmark = false, bool goal = false)
+        {
+            if (!initialized)
+                return null;
+            if (border == Color.clear)
+                border = Settings.DefaultColor.Value;
+            if (!skip && regexFilter != null && !goal)
+                skip = regexFilter.IsMatch(text) ^ regexMatch;
+            try
+            {
+                if (revealed && !goal)
+                    return null;
+                else if (goal)
+                    countOffset++;
+                if (active > Count && !revealed)
                 {
-                    foreach (Transform child in transform)
+                    foreach (Transform child in _realHolder)
                     {
                         if (child.GetSiblingIndex() == 0) continue;
                         var item = child.GetComponent<TrackerItem>();
+                        if (item.skip) continue;
                         item.index--;
-                        if (item.leaving || !child.gameObject.activeSelf) continue;
+                        if (!child.gameObject.activeSelf) continue;
                         item.Move(item.index < 0);
-                        if (item.index < 0)
+                        if (!item.leaving && item.index < 0)
                         {
                             if (!item.pbDiff)
                                 active--;
@@ -104,17 +213,19 @@ namespace EventTracker.Objects
                         }
                     }
                 }
-                var newText = Instantiate(_textBase, transform).GetComponent<TrackerItem>();
+                var newText = Instantiate(_textBase, _realHolder).GetComponent<TrackerItem>();
                 newText.name = "Tracker Item";
                 newText.text = text;
                 newText.longTime = EventTracker.Game.GetCurrentLevelTimerMicroseconds();
                 newText.time = Game.GetTimerFormattedMillisecond(newText.longTime);
                 newText.color = border;
-                newText.gameObject.SetActive(true);
-                newText.index = active++;
+                newText.gameObject.SetActive(!skip);
+                if (!skip)
+                    newText.index = active++;
                 newText.holder = this;
                 newText.landmark = landmark;
                 newText.goal = goal;
+                newText.skip = skip;
 
                 if (pools != null)
                 {
@@ -154,14 +265,14 @@ namespace EventTracker.Objects
                         string sign = diff.ToString("+0;-#").First().ToString(); // lol
                         diff = Math.Abs(diff);
 
-                        var diffText = Instantiate(newText.gameObject, transform).GetComponent<TrackerItem>();
+                        var diffText = Instantiate(newText.gameObject, _realHolder).GetComponent<TrackerItem>();
                         diffText.name = "PB Diff";
                         diffText.text = $"{sign,32}{Game.GetTimerFormattedMillisecond(diff)}";
                         diffText.time = null;
                         diffText.pbDiff = true;
                         diffText.color = sign == "-" ? Color.green : Color.red;
 
-                        diffText.gameObject.SetActive(EventTracker.Settings.PBs.Value && !EventTracker.Settings.PBEndingOnly.Value);
+                        diffText.gameObject.SetActive(!skip && EventTracker.Settings.ShowPBDiff.Value && !EventTracker.Settings.EndingPBDiff.Value);
                     }
                     catch { }
                 }
@@ -177,28 +288,46 @@ namespace EventTracker.Objects
 
         public void ToggleVisibility()
         {
-            if (revealed) return;
             hidden = !hidden;
-            foreach (Transform child in transform)
+            if (!revealed)
             {
-                if (!child.gameObject.activeSelf)
-                    continue;
-                child.GetComponent<TrackerItem>().ChangeOpacity(hidden ? 0 : 1);
+                foreach (Transform child in _realHolder)
+                {
+                    if (!child.gameObject.activeSelf)
+                        continue;
+                    child.GetComponent<TrackerItem>().ChangeOpacity(hidden ? 0 : 1);
+                }
             }
         }
 
-        public void Reveal(bool pb, bool finished)
+        public void Reveal(bool pb, bool finished, bool early = false)
         {
             if (!finished)
             {
                 PushText("DNF", new Color32(191, 120, 48, 255), false, false);
-                if (!EventTracker.Settings.AdvancedMode.Value)
+                if (!Settings.AdvancedMode.Value)
                     return;
+            }
+            else
+            {
+                if (active == 0)
+                {
+                    revealed = finished;
+                    return;
+                }
+                hidden = false;
+                if (!Settings.EndingOnly.Value)
+                {
+                    _moveX.Start(Settings.X.Value, Settings.EndingX.Value);
+                    _moveY.Start(Settings.Y.Value, Settings.EndingY.Value);
+                    _scaleT.Start(Settings.Scale.Value, Settings.EndingScale.Value);
+                }
+
             }
 
             long time = EventTracker.Game.GetCurrentLevelTimerMicroseconds();
 
-            if (!EventTracker.Settings.AdvancedMode.Value && !pb && pools != null)
+            if (!Settings.AdvancedMode.Value && !pb && pools != null && !early)
             {
                 // we might not have our actual PB but it might be better than what we have on record
                 if (time < pools["Goal"][0].Item2)
@@ -209,7 +338,7 @@ namespace EventTracker.Objects
             string path = GetGhostDirectory();
             if (!LevelRush.IsLevelRush())
             {
-                if (!EventTracker.Settings.AdvancedMode.Value)
+                if (!Settings.AdvancedMode.Value)
                 {
                     path += "trackerPB.txt";
 
@@ -218,7 +347,7 @@ namespace EventTracker.Objects
                     else if (File.Exists(path))
                         File.Copy(path, Path.GetDirectoryName(path) + "/trackerOldPB.txt", true);
                 }
-                else
+                else if (!early)
                 {
                     float ftime = time / 1e6f;
                     float fastest = float.MaxValue;
@@ -243,6 +372,12 @@ namespace EventTracker.Objects
                     {
                         path += $"tracker-{ftime:0.000}";
                         if (!finished) path += "-DNF";
+
+                        int iter = 1;
+                        string pre = path;
+                        while (File.Exists(path + ".txt"))
+                            path = pre + $"-{++iter}";
+
                         path += ".txt";
                     }
                     else if (finished) path += "tracker.txt";
@@ -251,31 +386,38 @@ namespace EventTracker.Objects
 
                 try
                 {
-                    stream = new StreamWriter(path, false);
+                    if (!early)
+                        stream = new StreamWriter(path, false);
                 }
                 catch { }
             }
 
             stream?.WriteLine("Event               \tTime    \t             \t \tDifference to PB on-record");
 
-            float scroll = 0;
-            foreach (Transform child in transform)
+            revealed = finished;
+
+            if (finished && !early)
+                PushText("Goal", new Color32(0xFF, 0xCF, 0x40, 255), false, true, true);
+
+            Transform firstChild = _realHolder.Cast<Transform>().DefaultIfEmpty(null).FirstOrDefault(x => !x.GetComponent<TrackerItem>().skip);
+            // check the first real item
+            // if it's over the height we start Scroll Moding :tm:
+            if (firstChild && firstChild.GetComponent<TrackerItem>().index < 0)
+            {
+                // emerge = -((Settings.EndingBottom.Value * Screen.height) + Settings.Y.Value - Screen.height) / Settings.Padding.Value;
+                // emerge = Screen.height - TrackerItem.TargetY((int)Math.Ceiling(emerge));
+                scroll = TrackerItem.TargetY(firstChild.GetComponent<TrackerItem>().index - Count / 2);
+            }
+
+
+            foreach (Transform child in _realHolder)
             {
                 if (child.GetSiblingIndex() == 0) continue;
                 var item = child.GetComponent<TrackerItem>();
                 if (finished)
                 {
-                    if (!item.pbDiff || EventTracker.Settings.PBs.Value)
+                    if (!item.skip && (!item.pbDiff || Settings.ShowPBDiff.Value))
                         item.Reveal();
-                    item.scroll = scroll;
-                    if (child.GetSiblingIndex() == 1)
-                    {
-                        // check the first real item
-                        // if it's over the height we start Scroll Moding :tm:
-                        if (child.position.y > Screen.height)
-                            scroll = child.position.y;
-                        item.scroll = scroll;
-                    }
                 }
                 if (item.time != null)
                 {
@@ -284,7 +426,7 @@ namespace EventTracker.Objects
                     {
                         if (pools != null)
                         {
-                            var diffitem = transform.GetChild(child.GetSiblingIndex() + 1).GetComponent<TrackerItem>();
+                            var diffitem = _realHolder.GetChild(child.GetSiblingIndex() + 1).GetComponent<TrackerItem>();
                             if (!diffitem.pbDiff) throw new Exception();
                             diff = diffitem.text.TrimStart();
                         }
@@ -294,40 +436,42 @@ namespace EventTracker.Objects
                 }
             }
 
-            if (finished)
-            {
-                var goal = PushText("Goal", new Color32(0xFF, 0xCF, 0x40, 255), true, true);
-                goal.scroll = scroll;
-                goal.transform.position = new Vector3(EventTracker.Settings.X.Value, Screen.height - (--active * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value, 0);
-
-                // PB diff, basically copy
-                if (pools != null)
-                {
-                    var goald = transform.GetChild(transform.childCount - 1).GetComponent<TrackerItem>();
-                    goald.gameObject.SetActive(true);
-                    goald.pbDiff = true;
-                    goald.scroll = scroll;
-                    goald.transform.position = new Vector3(EventTracker.Settings.X.Value, Screen.height - (active * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value, 0);
-                    stream?.WriteLine($"{goal.text,-20}\t{goal.time}\t{goal.longTime,14}\t!\t{goald.text.TrimStart()}");
-                }
-                else
-                    stream?.WriteLine($"{goal.text,-20}\t{goal.time}\t{goal.longTime,14}\t!");
-            }
-
             if (stream != null)
             {
                 stream.Close();
 
-                var notif = PushText($"(saved to {Path.GetFileName(path)}!)", Color.white, false, finished);
+                var notif = PushText($"(saved to {Path.GetFileName(path)}!)", Color.white, false, false, finished);
                 notif.time = null; // but not pbdiff
-                if (finished)
-                {
-                    notif.scroll = scroll;
-                    notif.transform.position = new Vector3(EventTracker.Settings.X.Value, Screen.height - (active * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value, 0);
-                }
+                notif.Reveal();
             }
+            emerge = TrackerItem.TargetY(Count);
+        }
+        public void HandleMouseScroll(float scroll)
+        {
+            if (!revealed) return;
+            foreach (Transform child in _realHolder)
+            {
+                if (child.GetSiblingIndex() == 0) continue;
+                var item = child.GetComponent<TrackerItem>();
+                item.autoScroll = false;
+                item._scrollT.Start(item.manualScroll + scroll, 0);
+            }
+        }
 
-            revealed = finished;
+        public void PlaceTrigger()
+        {
+            var trigger = TrackerTrigger.Spawn(Settings.DefaultShape.Value);
+            trigger.placed = true;
+            trigger.transform.position = RM.playerPosition;
+            trigger.transform.rotation = RM.mechController.playerCamera.PlayerCam.transform.rotation;
+            trigger.transform.localScale = new Vector3(Settings.DefaultSize.Value, Settings.DefaultSize.Value, Settings.DefaultSize.Value);
+            trigger.color = UnityEngine.Random.ColorHSV(0, 1, .5f, .5f, .4f, .4f);
+            trigger.opacityT.Start(0, 1);
+            var encoded = trigger.Encode();
+            (EventTracker.JSON.json["triggers"] as ProxyArray).Add(JSON.Load(encoded));
+            EventTracker.JSON.Save();
+            var pushed = PushText($"Placed {trigger.name}", trigger.popColor, false);
+            pushed.time = null;
         }
     }
 }

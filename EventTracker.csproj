@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -67,6 +67,9 @@
     <Reference Include="UnityEngine.UIModule">
       <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Neon White\Neon White_Data\Managed\UnityEngine.UIModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Neon White\Neon White_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+    </Reference>
     <Reference Include="UniverseLib.Mono, Version=1.5.1.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Neon White\Mods\UniverseLib.Mono.dll</HintPath>
@@ -75,9 +78,10 @@
   <ItemGroup>
     <Compile Include="EventTracker.cs" />
     <Compile Include="Hooks.cs" />
-    <Compile Include="Objects\TrackerItem.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Objects\TrackerHolder.cs" />
+    <Compile Include="Objects\TrackerItem.cs" />
+    <Compile Include="Objects\TrackerTrigger.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

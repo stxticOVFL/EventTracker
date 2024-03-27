@@ -1,12 +1,17 @@
-﻿using System.Collections;
-using UnityEngine;
+﻿using UnityEngine;
 using TMPro;
+using System;
 
 namespace EventTracker.Objects
 {
+
+
+
     public class TrackerItem : MonoBehaviour
     {
-        public float scroll;
+        public bool revealed = false;
+        public bool autoScroll = true;
+        public float manualScroll { get { return _scrollT.result; } }
         public bool leaving;
 
         public bool pbDiff = false;
@@ -23,16 +28,63 @@ namespace EventTracker.Objects
         public TrackerHolder holder;
 
         private TextMeshProUGUI _text;
-        private float _opacity = 0.0f;
 
-        private readonly float speed = 4;
-        private Coroutine _easer;
-        private Coroutine _opacityEaser;
+        private float speed = 4;
+        public bool skip = false;
+
+        public class Transition(Func<float, float, float, float> ease, Action finish)
+        {
+            Func<float, float, float, float> easeFunc = ease;
+            Action finishFunc = finish;
+
+            public bool skip = false;
+            public float start;
+            public float goal;
+            public float result;
+            public bool running;
+            public float speed;
+            public float time;
+
+            public void Start(float? s, float g)
+            {
+                running = true;
+                time = 0;
+                start = s ?? result;
+                result = start;
+                goal = g;
+            }
+
+            public void Process()
+            {
+                if (time == 1f)
+                {
+                    result = goal;
+                    finishFunc?.Invoke();
+                    running = false;
+                }
+                if (!running)
+                    return;
+                time = Math.Min(1f, time + (Time.unscaledDeltaTime * speed));
+                result = easeFunc(start, goal, time);
+            }
+        }
+
+        private Transition _opacityT = new(AxKEasing.Linear, null);
+        private Transition _moveT = new(AxKEasing.EaseOutExpo, null);
+        private Transition _moveXT = new(AxKEasing.EaseOutBack, null);
+        public Transition _scrollT = new(AxKEasing.EaseOutCubic, null);
+
+        private float _opacity { get { return _opacityT.result; } set { _opacityT.result = value; } }
+
+        private bool _teleport;
+
+        public float TargetY() { return TargetY(index); }
+        public static float TargetY(int index) => -index * EventTracker.Settings.Padding.Value;
 
         void UpdateText()
         {
-            _text.faceColor = (!pbDiff ? Color.black : color).Alpha(_opacity);
-            _text.outlineColor = (!pbDiff ? color : Color.black).Alpha(_opacity);
+            _text.faceColor = (!pbDiff ? Color.black : color).Alpha(holder.forceHide ? 0 : _opacity);
+            _text.outlineColor = (!pbDiff ? color : Color.black).Alpha(holder.forceHide ? 0 : _opacity);
             if (time != null)
                 _text.text = $"{text,-20} {time}";
             else _text.text = text;
@@ -40,14 +92,16 @@ namespace EventTracker.Objects
 
         public void ChangeOpacity(float opacity, float? start = null)
         {
-            if (!EventTracker.Settings.Animated.Value)
+            if (!holder.revealed && !EventTracker.Settings.Animated.Value)
                 _opacity = opacity;
-            else
-            {
-                if (_opacityEaser != null)
-                    StopCoroutine(_opacityEaser);
-                _opacityEaser = StartCoroutine(Co_Opacity(start ?? _opacity, opacity, 1 / speed));
-            }
+            else if (opacity != _opacity || start != null)
+                _opacityT.Start(start, opacity);
+        }
+
+        private void Awake()
+        {
+            _opacityT = new(AxKEasing.Linear, OpacityDone);
+            // _moveT = new(AxKEasing.EaseOutExpo, MoveDone);
         }
 
         private void Start()
@@ -67,116 +121,135 @@ namespace EventTracker.Objects
                 _text.outlineWidth = 0.13f;
             }
             UpdateText();
-            if (!goal && (!pbDiff || !EventTracker.Settings.PBEndingOnly.Value))
+            if (!pbDiff || !EventTracker.Settings.EndingPBDiff.Value)
             {
                 Move(false, true);
-                if (!EventTracker.Settings.EndingOnly.Value && !TrackerHolder.hidden)
+                if ((!goal && !EventTracker.Settings.EndingOnly.Value && !holder.hidden) || (goal && holder.scroll == 0))
+                {
                     ChangeOpacity(1);
+                    if (EventTracker.Settings.Animated.Value && EventTracker.Settings.Bouncy.Value)
+                        _moveXT.Start(-30, 0);
+                }
+            }
+            else
+            {
+                _moveT.result = TargetY();
             }
         }
 
         private void Update()
         {
             UpdateText();
-            var pos = transform.position;
-            pos.x = EventTracker.Settings.X.Value;
-            if (scroll != 0)
+            var pos = transform.localPosition;
+            if (holder.scroll != 0)
             {
-                pos.y += EventTracker.Settings.ScrollSpeed.Value * Time.unscaledDeltaTime;
-                if (pos.y > scroll)
-                    pos.y -= scroll + EventTracker.Settings.Padding.Value;
-            }
-            if (holder.revealed)
-            {
-                if (_opacity < 1)
-                    _opacity += Time.unscaledDeltaTime * speed; // just do this one linearly idrc
-                pos.x = EventTracker.Settings.EndingX.Value;
-            }
-            transform.position = pos;
-        }
+                if (autoScroll)
+                    pos.y += EventTracker.Settings.DefaultScroll.Value * Time.unscaledDeltaTime;
+                else if (manualScroll != 0)
+                {
+                    _scrollT.speed = 4;
+                    pos.y += manualScroll;
+                    _scrollT.Process();
+                }
 
-        void MoveDone()
-        {
-            _easer = null;
-            if (leaving)
-                gameObject.SetActive(false);
-        }
+                if (pos.y > holder.scroll)
+                {
+                    _teleport = false;
+                    while (pos.y > holder.scroll)
+                        pos.y -= holder.scroll - holder.emerge;
+                }
+                else if (pos.y < holder.emerge && !_teleport)
+                {
+                    _teleport = true;
+                    ChangeOpacity(0);
+                }
 
-        IEnumerator Co_Move(float start, float end, float length)
-        {
-            // yoinked from AxkEasing
-            // tweaked for good :tm:
-            float t2 = 0f;
-            var pos = transform.position;
-            pos.x = EventTracker.Settings.X.Value;
-            pos.y = start;
-            transform.position = pos;
-            yield return null;
-
-            for (t2 += Time.unscaledDeltaTime; t2 < length; t2 += Time.unscaledDeltaTime)
-            {
-                float dist = t2 / length;
-                pos.y = AxKEasing.EaseOutExpo(start, end, dist);
-                transform.position = pos;
-                yield return null;
-            }
-
-            pos.y = end;
-            transform.position = pos;
-            MoveDone();
-
-            yield return null;
-        }
-
-        IEnumerator Co_Opacity(float start, float end, float length)
-        {
-            float t2 = 0f;
-            _opacity = start;
-            yield return null;
-
-            for (t2 += Time.unscaledDeltaTime; t2 < length; t2 += Time.unscaledDeltaTime)
-            {
-                float dist = t2 / length;
-                _opacity = AxKEasing.Linear(start, end, dist);
-                yield return null;
-            }
-
-            _opacity = end;
-            _opacityEaser = null;
-
-            yield return null;
-
-        }
-
-        public void Move(bool end, bool transition = true)
-        {
-            var endPos = Screen.height - (index * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value;
-            if (!EventTracker.Settings.Animated.Value || (_opacity == 0 && !transition))
-            {
-                var pos = transform.position;
-                pos.y = endPos;
-                transform.position = pos;
-                MoveDone();
+                if (pos.y > 0)
+                {
+                    if (!_opacityT.running || _opacityT.goal != 0)
+                        ChangeOpacity(0);
+                }
+                else if (!_teleport)
+                {
+                    if (!holder.hidden && (!_opacityT.running || _opacityT.goal != 1))
+                        ChangeOpacity(1);
+                    else if (holder.hidden && (!_opacityT.running || _opacityT.goal != 0))
+                        ChangeOpacity(0);
+                }
             }
             else
             {
-                if (_easer != null)
-                    StopCoroutine(_easer);
+                pos.y = _moveT.result;
+                if (_moveXT.running)
+                    pos.x = _moveXT.result;
+                else pos.x = 0;
+            }
+            transform.localPosition = pos;
+
+            _opacityT.speed = speed;
+            _moveT.speed = speed;
+            _moveXT.speed = speed;
+
+            if (holder.forceHide)
+            {
+                _opacityT.time = 1;
+                _moveT.time = 1;
+                _moveXT.time = 1;
+            }
+
+            _opacityT.Process();
+            _moveT.Process();
+            _moveXT.Process();
+
+        }
+
+        void OpacityDone()
+        {
+            if (_teleport)
+            {
+                //Debug.Log($"{text} teleport!");
+                var pos = transform.localPosition;
+                while (pos.y < holder.emerge)
+                {
+                    pos.y += holder.scroll - holder.emerge;
+                    ///Debug.Log($"{text} loop");
+                }
+                transform.localPosition = pos;
+                _teleport = false;
+            }
+            if (leaving)
+                gameObject.SetActive(false);
+        }
+        public void Move(bool end, bool transition = true)
+        {
+            var endPos = TargetY();
+            if ((goal && holder.scroll != 0) || !EventTracker.Settings.Animated.Value || (_opacity == 0 && !transition))
+            {
+                _moveT.result = endPos;
+                OpacityDone();
+            }
+            else
+            {
                 var pos = endPos;
                 var pre = pos - EventTracker.Settings.Padding.Value;
-                _easer = StartCoroutine(Co_Move(pre, pos, 1 / speed));
+                _moveT.Start(pre, pos);
             }
-            if (end)
+            if (end && (!_opacityT.running || _opacityT.goal != 0))
+            {
+                if (EventTracker.Settings.Animated.Value && EventTracker.Settings.Bouncy.Value)
+                    _moveXT.Start(0, -30);
                 ChangeOpacity(0);
+            }
         }
 
         public void Reveal()
         {
-            gameObject.SetActive(true);
-            if (_easer != null)
-                StopCoroutine(_easer);
+            speed = 10;
             leaving = false;
-            transform.position = new Vector3(EventTracker.Settings.EndingX.Value, Screen.height - (index * EventTracker.Settings.Padding.Value) - EventTracker.Settings.Y.Value, 0);
+            revealed = true;
+            gameObject.SetActive(true);
+            _moveT.running = false;
+            transform.localPosition = new Vector3(0, TargetY(), 0);
         }
     }
 }

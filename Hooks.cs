@@ -23,6 +23,11 @@ namespace EventTracker
 
         static TrackerItem burst = null;
 
+        static TrackerItem parry = null;
+        static bool parryGround = false;
+        public static float parryTimer;
+        static int parryCount;
+
         static string GetCardName(PlayerCardData data)
         {
             try
@@ -51,12 +56,9 @@ namespace EventTracker
             var card = __instance.GetPlayerCardDeck().GetCardInHand(0);
             var name = GetCardName(card.data);
             if (onPickup)
-            {
-                if (EventTracker.Settings.Pickup.Value)
-                    EventTracker.holder.PushText($"Pick up {name}", card.data.cardColor);
-            }
-            else if (EventTracker.Settings.Swap.Value)
-                EventTracker.holder.PushText($"Swap to {name}", card.data.cardColor);
+                EventTracker.holder.PushText($"Pick up {name}", card.data.cardColor, !EventTracker.JSON.GetSetting("pickup"));
+            else
+                EventTracker.holder.PushText($"Swap to {name}", card.data.cardColor, !EventTracker.JSON.GetSetting("swap"));
         }
 
         [HarmonyPrefix]
@@ -81,16 +83,15 @@ namespace EventTracker
             if (card.data.discardAbility == PlayerCardData.DiscardAbility.Consumable)
             {
                 // this says "Fire Ammo" for some reason so we'll just
-                if (EventTracker.Settings.Pickup.Value)
-                    EventTracker.holder.PushText($"Pick up {GetCardName(card.data)}", card.data.cardColor);
+                EventTracker.holder.PushText($"Pick up {GetCardName(card.data)}", card.data.cardColor, !EventTracker.JSON.GetSetting("pickup"));
                 return;
             }
-            if (card.data.cardType != PlayerCardData.Type.WeaponProjectile && card.data.cardType != PlayerCardData.Type.WeaponHitscan) 
+            if (card.data.cardType != PlayerCardData.Type.WeaponProjectile && card.data.cardType != PlayerCardData.Type.WeaponHitscan)
                 return;
-            if (__result && EventTracker.Settings.Fire.Value)
+            if (__result)
             {
                 if (__instance._bulletsFiredThisBurst == 0)
-                    burst = EventTracker.holder.PushText($"Fire {GetCardName(card.data)}", card.data.cardColor);
+                    burst = EventTracker.holder.PushText($"Fire {GetCardName(card.data)}", card.data.cardColor, !EventTracker.JSON.GetSetting("fire"));
                 else if (burst != null)
                     burst.text = $"Fire {GetCardName(card.data)} ({__instance._bulletsFiredThisBurst + 1})";
             }
@@ -101,8 +102,20 @@ namespace EventTracker
         static void OnParry(ref FirstPersonDrifter __instance)
         {
             if (!EventTracker.holder) return;
-            if (EventTracker.Settings.Parry.Value)
-                EventTracker.holder.PushText("Parry " + (__instance.GetIsGrounded() ? "(Grounded)" : ""));
+            bool diff = __instance.GetIsGrounded() != parryGround;
+            parryGround = __instance.GetIsGrounded();
+
+            if (parry == null || diff || parryTimer <= 0)
+            {
+                parryCount = 1;
+                parryTimer = 0.3f;
+                parry = EventTracker.holder.PushText("Parry " + (parryGround ? "(Grounded)" : ""), !EventTracker.JSON.GetSetting("parry"));
+            }
+            else
+            {
+                parryTimer = 0.3f;
+                parry.text = "Parry " + (parryGround ? "(Grounded) " : "") + $"(x{++parryCount})";
+            }
         }
 
         [HarmonyPrefix]
@@ -120,8 +133,8 @@ namespace EventTracker
         static void PostUseDiscardAbility(bool __result, ref PlayerCardData data)
         {
             if (!EventTracker.holder) return;
-            if (__result && EventTracker.Settings.Discard.Value)
-                EventTracker.holder.PushText($"Discard {GetCardName(data)}", data.cardColor);
+            if (__result)
+                EventTracker.holder.PushText($"Discard {GetCardName(data)}", data.cardColor, !EventTracker.JSON.GetSetting("discard"));
             isSwap = true;
             if (!boof)
                 isJump = true;
@@ -141,16 +154,13 @@ namespace EventTracker
                 return;
             }
             if (!isCappable)
-            {
-                if (EventTracker.Settings.Boost.Value)
-                    EventTracker.holder.PushText("Boost");
-            }
-            else if (!cancelDurationalMovementAbilities && EventTracker.Settings.Jump.Value)
+                EventTracker.holder.PushText("Boost", !EventTracker.JSON.GetSetting("boost"));
+            else if (!cancelDurationalMovementAbilities)
             {
                 if (__instance.GetIsGrounded())
-                    EventTracker.holder.PushText($"Jump");
+                    EventTracker.holder.PushText($"Jump", !EventTracker.JSON.GetSetting("jump"));
                 else
-                    EventTracker.holder.PushText($"Coyote Jump");
+                    EventTracker.holder.PushText($"Coyote Jump", !EventTracker.JSON.GetSetting("jump"));
             }
         }
 
@@ -161,7 +171,7 @@ namespace EventTracker
             if (!EventTracker.holder) return;
 
             // TODO: maybe try a diff state
-            if (s == BossEncounter.State.Vulnerable && EventTracker.Settings.BossWaves.Value)
+            if (s == BossEncounter.State.Vulnerable && EventTracker.JSON.GetSetting("bossWaves"))
                 EventTracker.holder.PushText($"End Wave {bossWave++}", new Color32(6, 183, 0, 255), true);
         }
 
@@ -177,9 +187,6 @@ namespace EventTracker
             bool matter = true;
             if (!RM.ui.demonCounterHolder.activeSelf)
                 matter = false;
-
-            if (matter && !EventTracker.Settings.EnemyDeath.Value) return;
-            if (!matter && !EventTracker.Settings.TrivialDeath.Value) return;
 
             string name = "";
             switch (__instance.GetEnemyType())
@@ -211,14 +218,14 @@ namespace EventTracker
 
                 string demons = "Demons";
                 if (count == 1) demons = "Demon";
-                EventTracker.holder.PushText($"{count} {demons} ({name})", Color.white, true);
+                EventTracker.holder.PushText($"{count} {demons} ({name})", Color.clear, !EventTracker.JSON.GetSetting("enemyDeath"), true);
             }
-            else EventTracker.holder.PushText($"Kill {name}", Color.white);
+            else EventTracker.holder.PushText($"Kill {name}", Color.clear, !EventTracker.JSON.GetSetting("trivialDeath"));
         }
 
         [HarmonyPrefix]
         [HarmonyPatch(typeof(Enemy), "ForceDie")]
-        static void EnemyForceDie(ref Enemy __instance) 
+        static void EnemyForceDie(ref Enemy __instance)
         {
             EnemyDie(ref __instance);
         }
@@ -230,13 +237,10 @@ namespace EventTracker
             if (!EventTracker.holder) return;
 
             if (__instance._damageableType == BaseDamageable.DamageableType.Wall)
+                EventTracker.holder.PushText($"Break red-wood {++redwood}", new Color32(0xE1, 0x60, 0x58, 255), !EventTracker.JSON.GetSetting("redDestruct"), true);
+            else
             {
-                if (EventTracker.Settings.RedDestructable.Value)
-                    EventTracker.holder.PushText($"Break red-wood {++redwood}", new Color32(0xE1, 0x60, 0x58, 255), true);
-            }
-            else if (EventTracker.Settings.OtherDestructables.Value)
-            {
-                if (__instance._damageableType == BaseDamageable.DamageableType.Enemy) 
+                if (__instance._damageableType == BaseDamageable.DamageableType.Enemy)
                     return; // we don't do that here
 
                 string damageable = ((BaseDamageable.DamageableType)((int)__instance._damageableType / 10 * 10)).ToString(); // handle crystal types and cast to string
@@ -245,7 +249,7 @@ namespace EventTracker
                 if (damageable == "Platform")
                     damageable = "Glass";
 
-                EventTracker.holder.PushText($"Break {damageable}");
+                EventTracker.holder.PushText($"Break {damageable}", !EventTracker.JSON.GetSetting("otherDestruct"));
             }
         }
 
@@ -285,6 +289,38 @@ namespace EventTracker
                 MelonLogger.Error($"error occured when winning :( {e}");
             }
         }
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(MechController), "Die")]
+        private static void OnPlayerDie(ref bool restartImmediately, ref bool playRestartSound)
+        {
+            if (!EventTracker.holder && EventTracker.holder.revealed) return;
+            if (restartImmediately)
+                EventTracker.holder.Reveal(false, true, true);
+            else
+                EventTracker.holder.PushText("Death", new Color32(235, 23, 66, 255), !EventTracker.JSON.GetSetting("death"), true);
+        }
 
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(MainMenu), "SetState")]
+        private static void MenuState(ref MainMenu.State newState)
+        {
+            if (!EventTracker.holder) return;
+            if (newState == MainMenu.State.Loading)
+                EventTracker.holder.forceHide = true;
+            else
+            {
+                EventTracker.holder.forceHide = false;
+                if (newState == MainMenu.State.Staging)
+                {
+                    if (EventTracker.Settings.UseJSON.Value)
+                        EventTracker.holder.LoadJSON();
+                    else
+                    {
+                        EventTracker.JSON.json = null; // rip :(
+                        TrackerHolder.regexFilter = null;
+                    }
+                }
+            }
+        }
     }
 }
