@@ -38,7 +38,8 @@ namespace EventTracker.Objects
         private readonly TrackerItem.Transition _scaleT = new(AxKEasing.EaseOutQuint, null);
 
         private LevelData loadedLevel = null;
-        private string loadedFile = "";
+        private string loadedFile = null;
+        private DateTime loadedTime = DateTime.MinValue;
 
 
         public static string GetGhostDirectory(LevelData level = null)
@@ -90,27 +91,23 @@ namespace EventTracker.Objects
             }
         }
 
-        public void Initialize()
+        public void LoadComparison()
         {
             if (!LevelRush.IsLevelRush())
             {
-                loadedLevel = EventTracker.Game.GetCurrentLevel();
                 string path = GetGhostDirectory(loadedLevel);
                 string file = Settings.ReadFilename.Value;
                 if (!Settings.AdvancedMode.Value)
                     file = "trackerPB.txt";
                 path += file;
 
-                if (File.Exists(path) && path != loadedFile)
+                if (File.Exists(path) && (loadedLevel != EventTracker.Game.GetCurrentLevel() || loadedFile != file || loadedTime < File.GetLastWriteTimeUtc(path)))
                 {
-                    loadedFile = path;
-                    if (Settings.AdvancedMode.Value)
-                    {
-                        var text = PushText($"(comparing to {file})", false);
-                        text.time = null;
-                    }
-                    bool header = true;
                     pools = [];
+                    loadedLevel = EventTracker.Game.GetCurrentLevel();
+                    loadedFile = file;
+                    loadedTime = File.GetLastWriteTimeUtc(path);
+                    bool header = true;
                     currentPool = "";
                     pools.Add("", []);
                     foreach (var line in File.ReadLines(path))
@@ -129,6 +126,19 @@ namespace EventTracker.Objects
                         pools[currentPool].Add(new(details[0].TrimEnd(), long.Parse(details[2])));
                     }
                 }
+                else if (!File.Exists(path))
+                    pools = [];
+            }
+            else
+                pools = [];
+        }
+
+        public void Initialize()
+        {
+            if (Settings.AdvancedMode.Value)
+            {
+                var text = PushText($"(comparing to {loadedFile})", false);
+                text.time = null;
             }
             currentPool = "";
             initialized = true;
@@ -167,7 +177,7 @@ namespace EventTracker.Objects
             float y = revealed ? _moveY.result : Settings.Y.Value;
             float scale = revealed ? _scaleT.result : Settings.Scale.Value;
             _realHolder.position = new Vector3(x * Screen.width, Screen.height - (y * Screen.height), 0);
-            _realHolder.localScale = new Vector3(scale * (Screen.height / 1080), scale * (Screen.height / 1080), 1);
+            _realHolder.localScale = new Vector3(scale * (Screen.height / 1080f), scale * (Screen.height / 1080f), 1);
             if (forceHide)
             {
                 _moveX.time = 1;
@@ -251,15 +261,18 @@ namespace EventTracker.Objects
                     {
                         int index = poolIndex;
                         var desctime = pools[currentPool][index];
+                        string compareF = desctime.Item1.Split('(')[0];
+                        string compareT = text.Split('(')[0];
                         while (true)
                         {
                             index++;
-                            if (desctime.Item1 == text.TrimEnd())
+                            if (compareF == compareT)
                             {
                                 poolIndex = index;
                                 break;
                             }
                             desctime = pools[currentPool][index];
+                            compareF = desctime.Item1.Split('(')[0];
                         }
                         var diff = newText.longTime - desctime.Item2;
                         string sign = diff.ToString("+0;-#").First().ToString(); // lol
@@ -272,7 +285,7 @@ namespace EventTracker.Objects
                         diffText.pbDiff = true;
                         diffText.color = sign == "-" ? Color.green : Color.red;
 
-                        diffText.gameObject.SetActive(!skip && EventTracker.Settings.ShowPBDiff.Value && !EventTracker.Settings.EndingPBDiff.Value);
+                        diffText.gameObject.SetActive(!skip && Settings.ShowPBDiff.Value && !Settings.EndingPBDiff.Value);
                     }
                     catch { }
                 }
@@ -399,14 +412,14 @@ namespace EventTracker.Objects
             if (finished && !early)
                 PushText("Goal", new Color32(0xFF, 0xCF, 0x40, 255), false, true, true);
 
-            Transform firstChild = _realHolder.Cast<Transform>().DefaultIfEmpty(null).FirstOrDefault(x => !x.GetComponent<TrackerItem>().skip);
+            TrackerItem firstChild = _realHolder.Cast<Transform>().DefaultIfEmpty(null).FirstOrDefault(x => !x.GetComponent<TrackerItem>().skip)?.GetComponent<TrackerItem>();
             // check the first real item
             // if it's over the height we start Scroll Moding :tm:
-            if (firstChild && firstChild.GetComponent<TrackerItem>().index < 0)
+            if (firstChild && firstChild.index < 0)
             {
                 // emerge = -((Settings.EndingBottom.Value * Screen.height) + Settings.Y.Value - Screen.height) / Settings.Padding.Value;
                 // emerge = Screen.height - TrackerItem.TargetY((int)Math.Ceiling(emerge));
-                scroll = TrackerItem.TargetY(firstChild.GetComponent<TrackerItem>().index - Count / 2);
+                scroll = TrackerItem.TargetY(firstChild.index + (Settings.EndingLimit.Value - Settings.Limit.Value - 3));
             }
 
 

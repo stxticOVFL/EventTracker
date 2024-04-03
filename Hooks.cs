@@ -114,7 +114,7 @@ namespace EventTracker
             else
             {
                 parryTimer = 0.3f;
-                parry.text = "Parry " + (parryGround ? "(Grounded) " : "") + $"(x{++parryCount})";
+                parry.text = "Parry " + (parryGround ? "(Ground) " : "") + $"({++parryCount})";
             }
         }
 
@@ -312,6 +312,7 @@ namespace EventTracker
                 EventTracker.holder.forceHide = false;
                 if (newState == MainMenu.State.Staging)
                 {
+                    EventTracker.holder.LoadComparison();
                     if (EventTracker.Settings.UseJSON.Value)
                         EventTracker.holder.LoadJSON();
                     else

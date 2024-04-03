@@ -133,6 +133,7 @@ namespace EventTracker.Objects
             }
             else
             {
+                _moveXT.result = 0;
                 _moveT.result = TargetY();
             }
         }
