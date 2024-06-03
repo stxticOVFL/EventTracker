@@ -196,7 +196,7 @@ namespace EventTracker
                 UseJSON = AdvancedCategory.CreateEntry("Use advanced JSON", false, description: "Loads/creates a JSON in the ghost directory for adjusting triggers and per-level customizations.");
                 PlaceVisible = AdvancedCategory.CreateEntry("Triggers Visible", true);
                 PlaceKey = AdvancedCategory.CreateEntry("Place Trigger Key", KeyCode.RightBracket, description: "The key to place and save a trigger using the below default settings.");
-                PlaceRemove = AdvancedCategory.CreateEntry("Remove Trigger Key", KeyCode.RightBracket, description: "The key to remove and save a trigger using the below default settings.");
+                PlaceRemove = AdvancedCategory.CreateEntry("Remove Trigger Key", KeyCode.LeftBracket, description: "The key to remove and save a trigger using the below default settings.");
                 DefaultShape = AdvancedCategory.CreateEntry("Trigger Default Shape", PlacementShapes.Plane, description: "The default shape to use.\nPlanes are one-sided, so they will be placed opposite to where you face, completely vertical to make it easier.");
                 DefaultSize = AdvancedCategory.CreateEntry("Trigger Default Size", 15f, description: "The default size of the placed trigger.", validator: new MinOnly<float>(0));
             }
