@@ -14,6 +14,7 @@ namespace EventTracker.Objects
         public bool initialized = false;
         public bool hidden = false;
         public bool forceHide = false;
+        bool hiddenMemory = false;
 
         private Canvas _canvas;
         private Transform _realHolder = null;
@@ -71,12 +72,13 @@ namespace EventTracker.Objects
             _textBase.SetActive(false);
             _textBase.GetComponent<TrackerItem>().skip = true;
             _textBase.transform.localPosition = Vector3.zero;
+            _textBase.transform.localScale = Vector3.one;
             _textBase.transform.parent = _realHolder;
         }
 
         public void Clear()
         {
-
+            hidden = hiddenMemory;
             revealed = false;
             initialized = false;
             active = 0;
@@ -135,21 +137,33 @@ namespace EventTracker.Objects
 
         public void Initialize()
         {
-            if (Settings.AdvancedMode.Value)
+            currentPool = "";
+            initialized = true;
+            if (pools.Count > 0 && Settings.AdvancedMode.Value)
             {
                 var text = PushText($"(comparing to {loadedFile})", false);
                 text.time = null;
             }
-            currentPool = "";
-            initialized = true;
         }
 
         public void LoadJSON()
         {
             EventTracker.JSON.Load();
             TrackerTrigger.holder = new GameObject("Trigger Holder").transform;
+            bool resave = false;
             foreach (Variant data in EventTracker.JSON.json["triggers"] as ProxyArray)
-                TrackerTrigger.Decode(data);
+            {
+                var trigger = TrackerTrigger.Decode(data);
+                try
+                {
+                    _ = trigger.data["id"];
+                }
+                catch
+                {
+                    trigger.data = JSON.Load(trigger.Encode());
+                    resave = true;
+                }
+            }
 
             try
             {
@@ -161,6 +175,17 @@ namespace EventTracker.Objects
                 regexFilter = null;
                 EventTracker.JSON.json["regex"] = null;
                 EventTracker.JSON.json["regexMatch"] = new ProxyBoolean(true);
+                resave = true;
+            }
+            
+            if (resave)
+            {
+                var newArray = new ProxyArray();
+
+                foreach (Transform tt in TrackerTrigger.holder)
+                    newArray.Add(tt.GetComponent<TrackerTrigger>().data);
+
+                EventTracker.JSON.json["triggers"] = newArray;
                 EventTracker.JSON.Save();
             }
         }
@@ -205,7 +230,7 @@ namespace EventTracker.Objects
                     return null;
                 else if (goal)
                     countOffset++;
-                if (active > Count && !revealed)
+                if (!skip && active > Count && !revealed)
                 {
                     foreach (Transform child in _realHolder)
                     {
@@ -280,12 +305,12 @@ namespace EventTracker.Objects
 
                         var diffText = Instantiate(newText.gameObject, _realHolder).GetComponent<TrackerItem>();
                         diffText.name = "PB Diff";
-                        diffText.text = $"{sign,32}{Game.GetTimerFormattedMillisecond(diff)}";
+                        diffText.text = $"{sign.PadLeft(12 + Settings.TimerPadding.Value)}{Game.GetTimerFormattedMillisecond(diff)}";
                         diffText.time = null;
                         diffText.pbDiff = true;
                         diffText.color = sign == "-" ? Color.green : Color.red;
 
-                        diffText.gameObject.SetActive(!skip && Settings.ShowPBDiff.Value && !Settings.EndingPBDiff.Value);
+                        diffText.gameObject.SetActive(!skip && Settings.ShowPBDiff.Value);
                     }
                     catch { }
                 }
@@ -301,8 +326,8 @@ namespace EventTracker.Objects
 
         public void ToggleVisibility()
         {
-            hidden = !hidden;
-            if (!revealed)
+            hiddenMemory = hidden = !hidden;
+            if (!revealed || scroll == 0)
             {
                 foreach (Transform child in _realHolder)
                 {
@@ -317,7 +342,7 @@ namespace EventTracker.Objects
         {
             if (!finished)
             {
-                PushText("DNF", new Color32(191, 120, 48, 255), false, false);
+                PushText("DNF", new Color32(191, 120, 48, 255), false, false, Settings.AdvancedMode.Value);
                 if (!Settings.AdvancedMode.Value)
                     return;
             }
@@ -328,15 +353,14 @@ namespace EventTracker.Objects
                     revealed = finished;
                     return;
                 }
-                hidden = false;
                 if (!Settings.EndingOnly.Value)
                 {
                     _moveX.Start(Settings.X.Value, Settings.EndingX.Value);
                     _moveY.Start(Settings.Y.Value, Settings.EndingY.Value);
                     _scaleT.Start(Settings.Scale.Value, Settings.EndingScale.Value);
                 }
-
             }
+            hidden = false;
 
             long time = EventTracker.Game.GetCurrentLevelTimerMicroseconds();
 
@@ -421,6 +445,8 @@ namespace EventTracker.Objects
                 // emerge = Screen.height - TrackerItem.TargetY((int)Math.Ceiling(emerge));
                 scroll = TrackerItem.TargetY(firstChild.index + (Settings.EndingLimit.Value - Settings.Limit.Value - 3));
             }
+            else
+                scroll = 0;
 
 
             foreach (Transform child in _realHolder)
@@ -445,7 +471,8 @@ namespace EventTracker.Objects
                         }
                     }
                     catch { }
-                    stream?.WriteLine($"{item.text,-20}\t{item.time}\t{item.longTime,14}\t{(item.landmark ? '!' : ' ')}\t{diff}");
+
+                    stream?.WriteLine($"{item.text.PadRight(Settings.TimerPadding.Value)}\t{item.time}\t{item.longTime,14}\t{(item.landmark ? '!' : ' ')}\t{diff}");
                 }
             }
 

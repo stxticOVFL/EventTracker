@@ -4,6 +4,7 @@ using MelonLoader.TinyJSON;
 using System;
 using System.Globalization;
 using System.Linq;
+using UniverseLib.Input;
 
 namespace EventTracker.Objects
 {
@@ -19,6 +20,8 @@ namespace EventTracker.Objects
         bool hasHit = false;
         int multiHit = 0;
 
+        bool destroying = false;
+
         public Color popColor
         {
             get
@@ -29,6 +32,7 @@ namespace EventTracker.Objects
         }
 
         public bool placed = false;
+        public Variant data = null;
 
         MeshRenderer renderer;
         Collider collider;
@@ -48,6 +52,8 @@ namespace EventTracker.Objects
             ret.transform.parent = holder;
             ret.name = $"Trigger {holder.childCount}";
             ret.shape = shape;
+            // temporary till i migrate eveything to assetgroups
+            ret.gameObject.layer = LayerMask.NameToLayer("Trigger");
             if (type == PrimitiveType.Quad)
             {
                 ret.GetComponent<MeshCollider>().convex = true;
@@ -74,6 +80,11 @@ namespace EventTracker.Objects
 
         private void Update()
         {
+            if (EventTracker.Settings.PlaceVisible.Value)
+                Camera.allCameras[0].cullingMask |= 1 << LayerMask.NameToLayer("Trigger"); // i think this is always gonna be playercam
+            else
+                Camera.allCameras[0].cullingMask &= ~(1 << LayerMask.NameToLayer("Trigger"));
+
             color.a = EventTracker.Settings.PlaceVisible.Value ? opacity * .2f : 0;
             if (shape == PlacementShapes.Plane && hitCount != 0)
             {
@@ -86,12 +97,39 @@ namespace EventTracker.Objects
             renderer.material.SetColor("_TintColor", color);
             opacityT.Process();
             if (!opacityT.running && opacity == 0)
+            {
                 gameObject.SetActive(false);
+                if (destroying)
+                    Destroy(gameObject);
+            }
         }
 
         private void OnTriggerStay(Collider other)
         {
-            if (hasHit || placed || other.name != "Player" || hitCount == 0)
+            if (other.name != "Player")
+                return;
+
+            if (EventTracker.Settings.PlaceVisible.Value && !destroying && InputManager.GetKey(EventTracker.Settings.PlaceRemove.Value))
+            {
+                var copy = EventTracker.JSON.json["triggers"] as ProxyArray;
+                var newArray = new ProxyArray();
+                copy.Where(x => (x["id"] as ProxyNumber) != transform.GetSiblingIndex())
+                    .Select(x =>
+                    {
+                        if (x["id"] as ProxyNumber > transform.GetSiblingIndex())
+                            x["id"] = new ProxyNumber((x["id"] as ProxyNumber) - 1);
+                        return x;
+                    }).ToList().ForEach(newArray.Add);
+                EventTracker.JSON.json["triggers"] = newArray;
+
+                EventTracker.JSON.Save();
+                destroying = true;
+                var pushed = EventTracker.holder.PushText($"Removed {name}", popColor, false);
+                pushed.time = null;
+                opacityT.Start(null, 0);
+            }
+
+            if (hasHit || placed || hitCount == 0)
                 return;
 
             if (shape == PlacementShapes.Plane)
@@ -130,6 +168,7 @@ namespace EventTracker.Objects
             scl = scl.Substring(1, scl.Length - 2);
             return $$"""
             {
+                "id": {{transform.GetSiblingIndex()}},
                 "name": "{{name}}",
                 "shape": "{{shape}}",
                 "color": "#{{(byte)(color.r * 255):X2}}{{(byte)(color.g * 255):X2}}{{(byte)(color.b * 255):X2}}",
@@ -168,6 +207,7 @@ namespace EventTracker.Objects
                     .Select(float.Parse).ToArray();
                 ret.transform.localScale = new Vector3(split[0], split[1], split[2]);
                 ret.grounded = data["grounded"];
+                ret.data = data;
                 return ret;
             }
             catch (Exception e)

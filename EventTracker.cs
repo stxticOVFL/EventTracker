@@ -57,7 +57,7 @@ namespace EventTracker
                     holder.Reveal(false, true, true);
                 if (InputManager.MouseScrollDelta.y != 0)
                     holder.HandleMouseScroll(InputManager.MouseScrollDelta.y * Settings.ScrollStrength.Value);
-                if (InputManager.GetKeyDown(Settings.PlaceKey.Value) && Settings.UseJSON.Value)
+                if (InputManager.GetKeyDown(Settings.PlaceKey.Value) && Settings.UseJSON.Value && Settings.PlaceVisible.Value)
                     holder.PlaceTrigger();
             }
             if (Hooks.dnfTimer > 0)
@@ -104,6 +104,7 @@ namespace EventTracker
             public static MelonPreferences_Entry<bool> Animated;
             public static MelonPreferences_Entry<bool> Bouncy;
             public static MelonPreferences_Entry<Color> DefaultColor;
+            public static MelonPreferences_Entry<int> TimerPadding; // temp?
 
             public static MelonPreferences_Category EndingCategory;
             public static MelonPreferences_Entry<float> EndingX;
@@ -138,6 +139,7 @@ namespace EventTracker
             public static MelonPreferences_Entry<bool> UseJSON;
             public static MelonPreferences_Entry<bool> PlaceVisible;
             public static MelonPreferences_Entry<KeyCode> PlaceKey;
+            public static MelonPreferences_Entry<KeyCode> PlaceRemove;
             public static MelonPreferences_Entry<PlacementShapes> DefaultShape;
             public static MelonPreferences_Entry<float> DefaultSize;
 
@@ -148,7 +150,7 @@ namespace EventTracker
                 Enabled = MainCategory.CreateEntry("Enabled", true);
                 X = MainCategory.CreateEntry("XNew", 0.015625f, display_name: "X Position", validator: new ValueRange<float>(0, 1)); // 30 / 1920
                 Y = MainCategory.CreateEntry("YNew", 0.225f, display_name: "Y Position", validator: new ValueRange<float>(0, 1)); // 243 / 1080 or smth of the sort
-                Scale = MainCategory.CreateEntry("Scale", 1f);
+                Scale = MainCategory.CreateEntry("Scale", 1f, validator: new ValueRange<float>(0, 5));
                 Limit = MainCategory.CreateEntry("Entry Limit", 8);
                 Padding = MainCategory.CreateEntry("Padding", 25, description: "The padding between each entry in the list.");
                 Animated = MainCategory.CreateEntry("Movement Animation", true, description: "Enables the movement animation.");
@@ -158,6 +160,7 @@ namespace EventTracker
                 ToggleKey = MainCategory.CreateEntry("Toggle Visibility Key", KeyCode.Tab, description: "Pressing the assigned key will toggle display of the sidebar display.");
                 EarlyScroll = MainCategory.CreateEntry("Early Scrolling Key", KeyCode.UpArrow, description: "A key that lets you end entry collection early and scroll freely mid-level.");
                 DefaultColor = MainCategory.CreateEntry("Default Event Color", Color.white, description: "The default color to use for events like jumping or enemy death.");
+                TimerPadding = MainCategory.CreateEntry("Event Character Count", 20, description: "The amount of characters the event part of the tracking should have (the \"62 Demons (Tripwire)\" part) for padding between the event and timer.");
 
                 EndingCategory = MelonPreferences.CreateCategory("Event Tracker Ending");
 
@@ -167,7 +170,7 @@ namespace EventTracker
                 ScrollStrength = EndingCategory.CreateEntry("Manual Scroll Strength", -0.1f, description: "The **manual** scroll wheel speed to use at the end.");
                 EndingLimit = EndingCategory.CreateEntry("Ending Entry Limit", 8);
                 EndingPBDiff = EndingCategory.CreateEntry("Only show comparison at end", true);
-                EndingScale = EndingCategory.CreateEntry("Ending Scale", 1f);
+                EndingScale = EndingCategory.CreateEntry("Ending Scale", 1f, validator: new ValueRange<float>(0, 5));
 
                 EventsCategory = MelonPreferences.CreateCategory("Event Tracker Event Customization");
 
@@ -193,6 +196,7 @@ namespace EventTracker
                 UseJSON = AdvancedCategory.CreateEntry("Use advanced JSON", false, description: "Loads/creates a JSON in the ghost directory for adjusting triggers and per-level customizations.");
                 PlaceVisible = AdvancedCategory.CreateEntry("Triggers Visible", true);
                 PlaceKey = AdvancedCategory.CreateEntry("Place Trigger Key", KeyCode.RightBracket, description: "The key to place and save a trigger using the below default settings.");
+                PlaceRemove = AdvancedCategory.CreateEntry("Remove Trigger Key", KeyCode.RightBracket, description: "The key to remove and save a trigger using the below default settings.");
                 DefaultShape = AdvancedCategory.CreateEntry("Trigger Default Shape", PlacementShapes.Plane, description: "The default shape to use.\nPlanes are one-sided, so they will be placed opposite to where you face, completely vertical to make it easier.");
                 DefaultSize = AdvancedCategory.CreateEntry("Trigger Default Size", 15f, description: "The default size of the placed trigger.", validator: new MinOnly<float>(0));
             }

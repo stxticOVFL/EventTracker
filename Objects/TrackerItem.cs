@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using TMPro;
 using System;
+using static EventTracker.EventTracker;
 
 namespace EventTracker.Objects
 {
@@ -79,14 +80,14 @@ namespace EventTracker.Objects
         private bool _teleport;
 
         public float TargetY() { return TargetY(index); }
-        public static float TargetY(int index) => -index * EventTracker.Settings.Padding.Value;
+        public static float TargetY(int index) => -index * Settings.Padding.Value;
 
         void UpdateText()
         {
             _text.faceColor = (!pbDiff ? Color.black : color).Alpha(holder.forceHide ? 0 : _opacity);
             _text.outlineColor = (!pbDiff ? color : Color.black).Alpha(holder.forceHide ? 0 : _opacity);
             if (time != null)
-                _text.text = $"{text,-20} {time}";
+                _text.text = $"{text.PadRight(Settings.TimerPadding.Value)} {time}";
             else _text.text = text;
         }
 
@@ -121,13 +122,13 @@ namespace EventTracker.Objects
                 _text.outlineWidth = 0.13f;
             }
             UpdateText();
-            if (!pbDiff || !EventTracker.Settings.EndingPBDiff.Value)
+            if (!pbDiff || !Settings.EndingPBDiff.Value)
             {
                 Move(false, true);
-                if ((!goal && !EventTracker.Settings.EndingOnly.Value && !holder.hidden) || (goal && holder.scroll == 0))
+                if ((!goal && !Settings.EndingOnly.Value && !holder.hidden) || (goal && holder.scroll == 0))
                 {
                     ChangeOpacity(1);
-                    if (EventTracker.Settings.Animated.Value && EventTracker.Settings.Bouncy.Value)
+                    if (Settings.Animated.Value && Settings.Bouncy.Value)
                         _moveXT.Start(-30, 0);
                 }
             }
@@ -140,12 +141,13 @@ namespace EventTracker.Objects
 
         private void Update()
         {
+            transform.localScale = Vector3.one;
             UpdateText();
             var pos = transform.localPosition;
             if (holder.scroll != 0)
             {
                 if (autoScroll)
-                    pos.y += EventTracker.Settings.DefaultScroll.Value * Time.unscaledDeltaTime;
+                    pos.y += Settings.DefaultScroll.Value * Time.unscaledDeltaTime;
                 else if (manualScroll != 0)
                 {
                     _scrollT.speed = 4;
@@ -224,7 +226,7 @@ namespace EventTracker.Objects
         public void Move(bool end, bool transition = true)
         {
             var endPos = TargetY();
-            if ((goal && holder.scroll != 0) || !EventTracker.Settings.Animated.Value || (_opacity == 0 && !transition))
+            if ((goal && holder.scroll != 0) || !Settings.Animated.Value || (_opacity == 0 && !transition))
             {
                 _moveT.result = endPos;
                 OpacityDone();
@@ -232,12 +234,12 @@ namespace EventTracker.Objects
             else
             {
                 var pos = endPos;
-                var pre = pos - EventTracker.Settings.Padding.Value;
+                var pre = pos - Settings.Padding.Value;
                 _moveT.Start(pre, pos);
             }
             if (end && (!_opacityT.running || _opacityT.goal != 0))
             {
-                if (EventTracker.Settings.Animated.Value && EventTracker.Settings.Bouncy.Value)
+                if (Settings.Animated.Value && Settings.Bouncy.Value)
                     _moveXT.Start(0, -30);
                 ChangeOpacity(0);
             }
@@ -250,7 +252,10 @@ namespace EventTracker.Objects
             revealed = true;
             gameObject.SetActive(true);
             _moveT.running = false;
+            _moveT.goal = TargetY();
             transform.localPosition = new Vector3(0, TargetY(), 0);
+            if (holder.scroll == 0)
+                ChangeOpacity(1);
         }
     }
 }
