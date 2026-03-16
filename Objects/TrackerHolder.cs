@@ -281,38 +281,41 @@ namespace EventTracker.Objects
                         else // it just is the key
                             currentPool = text;
                     }
-
-                    try
+                    if (!skip)
                     {
-                        int index = poolIndex;
-                        var desctime = pools[currentPool][index];
-                        string compareF = desctime.Item1.Split('(')[0];
-                        string compareT = text.Split('(')[0];
-                        while (true)
+
+                        try
                         {
-                            index++;
-                            if (compareF == compareT)
+                            int index = poolIndex;
+                            var desctime = pools[currentPool][index];
+                            string compareF = desctime.Item1.Split('(')[0];
+                            string compareT = text.Split('(')[0];
+                            while (true)
                             {
-                                poolIndex = index;
-                                break;
+                                index++;
+                                if (compareF == compareT)
+                                {
+                                    poolIndex = index;
+                                    break;
+                                }
+                                desctime = pools[currentPool][index];
+                                compareF = desctime.Item1.Split('(')[0];
                             }
-                            desctime = pools[currentPool][index];
-                            compareF = desctime.Item1.Split('(')[0];
+                            var diff = newText.longTime - desctime.Item2;
+                            string sign = diff.ToString("+0;-#").First().ToString(); // lol
+                            diff = Math.Abs(diff);
+
+                            var diffText = Instantiate(newText.gameObject, _realHolder).GetComponent<TrackerItem>();
+                            diffText.name = "PB Diff";
+                            diffText.text = $"{sign.PadLeft(12 + Settings.TimerPadding.Value)}{Game.GetTimerFormattedMillisecond(diff)}";
+                            diffText.time = null;
+                            diffText.pbDiff = true;
+                            diffText.color = sign == "-" ? Color.green : Color.red;
+
+                            diffText.gameObject.SetActive(!skip && Settings.ShowPBDiff.Value);
                         }
-                        var diff = newText.longTime - desctime.Item2;
-                        string sign = diff.ToString("+0;-#").First().ToString(); // lol
-                        diff = Math.Abs(diff);
-
-                        var diffText = Instantiate(newText.gameObject, _realHolder).GetComponent<TrackerItem>();
-                        diffText.name = "PB Diff";
-                        diffText.text = $"{sign.PadLeft(12 + Settings.TimerPadding.Value)}{Game.GetTimerFormattedMillisecond(diff)}";
-                        diffText.time = null;
-                        diffText.pbDiff = true;
-                        diffText.color = sign == "-" ? Color.green : Color.red;
-
-                        diffText.gameObject.SetActive(!skip && Settings.ShowPBDiff.Value);
+                        catch { } 
                     }
-                    catch { }
                 }
 
                 return newText;
